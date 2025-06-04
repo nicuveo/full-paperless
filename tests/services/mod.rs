@@ -1,0 +1,14 @@
+// pub mod config;
+pub mod correspondents;
+// pub mod custom_fields;
+// pub mod document_types;
+pub mod groups;
+// pub mod mail_accounts;
+// pub mod mail_rules;
+// pub mod saved_views;
+// pub mod share_links;
+// pub mod storage_paths;
+// pub mod tags;
+// pub mod template;
+// pub mod users;
+// pub mod workflows;

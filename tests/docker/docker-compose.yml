@@ -1,0 +1,17 @@
+name: test
+services:
+  broker:
+    image: docker.io/library/redis:8
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    depends_on:
+      - broker
+    ports:
+      - "8101:8000"
+    env_file: docker-compose.env
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+volumes:
+  data:
+  media:
+  redisdata:

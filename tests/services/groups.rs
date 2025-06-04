@@ -1,0 +1,50 @@
+use paper_plane::schema::api::groups;
+use paper_plane::schema::model::PermissionClass;
+use paper_plane::services::Groups;
+
+use crate::utils::client;
+
+#[test]
+fn test_groups_crud() {
+    client::run_as_admin(async |client| {
+        // create
+        assert_eq!(0, client.groups().list(&groups::list()).await?.value.count);
+        let name = "ffjfak'dlfa#f['pw/qnf.".to_string();
+        let perms = vec![PermissionClass::UserDelete, PermissionClass::DocumentChange];
+        let mut item = client
+            .groups()
+            .create(&groups::create(name.clone(), perms.clone()))
+            .await?
+            .value;
+        assert_eq!(name, item.name);
+        assert_eq!(perms, item.permissions);
+        assert_eq!(1, client.groups().list(&groups::list()).await?.value.count);
+
+        // read
+        let item_copy = client.groups().retrieve(item.id).await?.value;
+        assert_eq!(item, item_copy);
+
+        // update
+        item.permissions.push(PermissionClass::NoteAdd);
+        let item_copy = client.groups().update(&item).await?.value;
+        assert_eq!(item, item_copy);
+
+        // patch
+        client
+            .groups()
+            .patch(&mut item, &groups::patch().name("-47r871qkds".to_string()))
+            .await?;
+
+        // read
+        let item_copy = client.groups().retrieve(item.id).await?.value;
+        assert_eq!(item, item_copy);
+
+        // delete
+        let id = item.id;
+        client.groups().destroy(item).await?;
+        assert_eq!(0, client.groups().list(&groups::list()).await?.value.count);
+        assert!(client.groups().retrieve(id).await.is_err());
+
+        Ok(())
+    })
+}
