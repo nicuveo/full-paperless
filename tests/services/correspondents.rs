@@ -50,21 +50,31 @@ fn test_correspondents_admin_crud() {
         assert_eq!(item, item_copy);
 
         // patch
-        client
+        let name = "-47r871qkds".to_string();
+        let item = client
             .correspondents()
-            .patch(
-                &mut item,
-                &correspondents::patch().name("-47r871qkds".to_string()),
-            )
-            .await?;
+            .patch(item.id, &correspondents::patch().name(name.clone()))
+            .await?
+            .value;
+        assert_eq!(name, item.name);
+        assert_eq!(Some(true), item.is_insensitive);
+        assert_eq!(Some("foo".to_string()), item.matches);
+        assert_eq!(
+            1,
+            client
+                .correspondents()
+                .list(&correspondents::list())
+                .await?
+                .value
+                .count
+        );
 
         // read
         let item_copy = client.correspondents().retrieve(item.id).await?.value;
         assert_eq!(item, item_copy);
 
         // delete
-        let id = item.id;
-        client.correspondents().destroy(item).await?;
+        client.correspondents().destroy(item.id).await?;
         assert_eq!(
             0,
             client
@@ -74,7 +84,7 @@ fn test_correspondents_admin_crud() {
                 .value
                 .count
         );
-        assert!(client.correspondents().retrieve(id).await.is_err());
+        assert!(client.correspondents().retrieve(item.id).await.is_err());
 
         Ok(())
     })
@@ -132,21 +142,31 @@ fn test_correspondents_user_crud() {
         assert_eq!(item, item_copy);
 
         // patch
-        client
+        let name = "-47r871qkds".to_string();
+        let item = client
             .correspondents()
-            .patch(
-                &mut item,
-                &correspondents::patch().name("-47r871qkds".to_string()),
-            )
-            .await?;
+            .patch(item.id, &correspondents::patch().name(name.clone()))
+            .await?
+            .value;
+        assert_eq!(name, item.name);
+        assert_eq!(Some(true), item.is_insensitive);
+        assert_eq!(Some("foo".to_string()), item.matches);
+        assert_eq!(
+            1,
+            client
+                .correspondents()
+                .list(&correspondents::list())
+                .await?
+                .value
+                .count
+        );
 
         // read
         let item_copy = client.correspondents().retrieve(item.id).await?.value;
         assert_eq!(item, item_copy);
 
         // delete
-        let id = item.id;
-        client.correspondents().destroy(item).await?;
+        client.correspondents().destroy(item.id).await?;
         assert_eq!(
             0,
             client
@@ -156,7 +176,7 @@ fn test_correspondents_user_crud() {
                 .value
                 .count
         );
-        assert!(client.correspondents().retrieve(id).await.is_err());
+        assert!(client.correspondents().retrieve(item.id).await.is_err());
 
         Ok(())
     })

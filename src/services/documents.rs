@@ -1,145 +1,153 @@
-use async_trait::async_trait;
-use bytes::Bytes;
-use reqwest::Method;
-
-use crate::body;
-use crate::client::Client;
+use crate::clients::Client;
 use crate::error::Result;
-use crate::params;
 use crate::response::Response;
 use crate::schema::api::documents::{Create, History, List, Patch};
 use crate::schema::model::{
     Document, DocumentMetadata, LogEntry, Paginated, ShareLink, Suggestions,
 };
+use crate::utils::{Method, body, params};
+use async_trait::async_trait;
+use bytes::Bytes;
 
 pub type Item = Document;
 
 #[async_trait]
-pub trait Documents {
-    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>>>;
-    async fn retrieve(&self, id: i32) -> Result<Response<Item>>;
-    async fn update(&self, item: &Item) -> Result<Response<Item>>;
-    async fn patch(&self, item: &mut Item, body: &Patch) -> Result<Response<()>>;
-    async fn destroy(&self, item: Item) -> Result<Response<()>>;
-    async fn preview(&self, id: i32) -> Result<Response<Bytes>>;
+pub trait Documents<E>: Sized {
+    fn documents(&self) -> &impl Documents<E> {
+        self
+    }
 
-    async fn thumbnail(&self, id: i32) -> Result<Response<Bytes>>;
-    async fn download(&self, id: i32, original: Option<bool>) -> Result<Response<Bytes>>;
-    async fn history(&self, id: i32, params: &History) -> Result<Response<Paginated<LogEntry>>>;
-    async fn metadata(&self, id: i32) -> Result<Response<DocumentMetadata>>;
-    async fn share_links(&self, id: i32) -> Result<Response<Vec<ShareLink>>>;
-    async fn sugestions(&self, id: i32) -> Result<Response<Suggestions>>;
+    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
+    async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;
+    async fn update(&self, item: &Item) -> Result<Response<Item, E>>;
+    async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, E>>;
+    async fn destroy(&self, id: i32) -> Result<Response<(), E>>;
+    async fn preview(&self, id: i32) -> Result<Response<Bytes, E>>;
+
+    async fn thumbnail(&self, id: i32) -> Result<Response<Bytes, E>>;
+    async fn download(&self, id: i32, original: Option<bool>) -> Result<Response<Bytes, E>>;
+    async fn history(&self, id: i32, params: &History) -> Result<Response<Paginated<LogEntry>, E>>;
+    async fn metadata(&self, id: i32) -> Result<Response<DocumentMetadata, E>>;
+    async fn share_links(&self, id: i32) -> Result<Response<Vec<ShareLink>, E>>;
+    async fn sugestions(&self, id: i32) -> Result<Response<Suggestions, E>>;
 
     async fn previous_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>>;
+    ) -> Result<Option<Response<Paginated<Item>, E>>>;
     async fn next_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>>;
+    ) -> Result<Option<Response<Paginated<Item>, E>>>;
 }
 
 #[async_trait]
-impl Documents for Client {
-    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>>> {
+impl<C: Client> Documents<C::Extra> for C {
+    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, C::Extra>> {
         let path = "/api/document/";
-        let req = self.build_request(Method::GET, path, params, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self.send(Method::GET, path, params, body::NONE).await?;
         Self::decode_json(resp).await
     }
 
-    async fn retrieve(&self, id: i32) -> Result<Response<Item>> {
+    async fn retrieve(&self, id: i32) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/document/{id}/");
         let params = vec![("full_perms", true)];
-        let req = self.build_request(Method::GET, &path, &params, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self.send(Method::GET, &path, &params, body::NONE).await?;
         Self::decode_json(resp).await
     }
 
-    async fn update(&self, body: &Item) -> Result<Response<Item>> {
+    async fn update(&self, body: &Item) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/document/{}/", body.id);
         let body = Create::from(body);
-        let req = self.build_request(Method::PUT, &path, params::NONE, body::json(&body))?;
-        let resp = self.send_request(req).await?;
+        let resp = self
+            .send(Method::PUT, &path, params::NONE, Some(&body))
+            .await?;
         Self::decode_json(resp).await
     }
 
-    async fn patch(&self, item: &mut Item, body: &Patch) -> Result<Response<()>> {
-        let path = format!("/api/document/{}/", item.id);
-        let req = self.build_request(Method::PATCH, &path, params::NONE, body::json(body))?;
-        let resp = Self::decode_json(self.send_request(req).await?).await?;
-        Ok(resp.assign(item))
+    async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, C::Extra>> {
+        let path = format!("/api/document/{id}/");
+        let resp = self
+            .send(Method::PATCH, &path, params::NONE, Some(body))
+            .await?;
+        Self::decode_json(resp).await
     }
 
-    async fn destroy(&self, item: Item) -> Result<Response<()>> {
-        let path = format!("/api/document/{}/", item.id);
-        let req = self.build_request(Method::DELETE, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
+    async fn destroy(&self, id: i32) -> Result<Response<(), C::Extra>> {
+        let path = format!("/api/document/{id}/");
+        let resp = self
+            .send(Method::DELETE, &path, params::NONE, body::NONE)
+            .await?;
         Self::ignore_content(resp)
     }
 
-    async fn preview(&self, id: i32) -> Result<Response<Bytes>> {
+    async fn preview(&self, id: i32) -> Result<Response<Bytes, C::Extra>> {
         let path = format!("/api/document/{id}/preview");
-        let req = self.build_request(Method::GET, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self
+            .send(Method::GET, &path, params::NONE, body::NONE)
+            .await?;
         Self::decode_bytes(resp).await
     }
 
-    async fn thumbnail(&self, id: i32) -> Result<Response<Bytes>> {
+    async fn thumbnail(&self, id: i32) -> Result<Response<Bytes, C::Extra>> {
         let path = format!("/api/document/{id}/thumb");
-        let req = self.build_request(Method::GET, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self
+            .send(Method::GET, &path, params::NONE, body::NONE)
+            .await?;
         Self::decode_bytes(resp).await
     }
 
-    async fn download(&self, id: i32, original: Option<bool>) -> Result<Response<Bytes>> {
+    async fn download(&self, id: i32, original: Option<bool>) -> Result<Response<Bytes, C::Extra>> {
         let path = format!("/api/document/{id}/download");
         let params = original.map(|o| vec![("original", o)]);
-        let req = self.build_request(Method::GET, &path, &params, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self.send(Method::GET, &path, &params, body::NONE).await?;
         Self::decode_bytes(resp).await
     }
 
-    async fn history(&self, id: i32, params: &History) -> Result<Response<Paginated<LogEntry>>> {
+    async fn history(
+        &self,
+        id: i32,
+        params: &History,
+    ) -> Result<Response<Paginated<LogEntry>, C::Extra>> {
         let path = format!("/api/document/{id}/history");
-        let req = self.build_request(Method::GET, &path, params, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self.send(Method::GET, &path, params, body::NONE).await?;
         Self::decode_json(resp).await
     }
 
-    async fn metadata(&self, id: i32) -> Result<Response<DocumentMetadata>> {
+    async fn metadata(&self, id: i32) -> Result<Response<DocumentMetadata, C::Extra>> {
         let path = format!("/api/document/{id}/metadata");
-        let req = self.build_request(Method::GET, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self
+            .send(Method::GET, &path, params::NONE, body::NONE)
+            .await?;
         Self::decode_json(resp).await
     }
 
-    async fn share_links(&self, id: i32) -> Result<Response<Vec<ShareLink>>> {
+    async fn share_links(&self, id: i32) -> Result<Response<Vec<ShareLink>, C::Extra>> {
         let path = format!("/api/document/{id}/share_links");
-        let req = self.build_request(Method::GET, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self
+            .send(Method::GET, &path, params::NONE, body::NONE)
+            .await?;
         Self::decode_json(resp).await
     }
 
-    async fn sugestions(&self, id: i32) -> Result<Response<Suggestions>> {
+    async fn sugestions(&self, id: i32) -> Result<Response<Suggestions, C::Extra>> {
         let path = format!("/api/document/{id}/suggestions");
-        let req = self.build_request(Method::GET, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self
+            .send(Method::GET, &path, params::NONE, body::NONE)
+            .await?;
         Self::decode_json(resp).await
     }
-
     async fn previous_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>> {
-        Client::previous_page(self, current).await
+    ) -> Result<Option<Response<Paginated<Item>, C::Extra>>> {
+        C::previous_page(self, current).await
     }
 
     async fn next_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>> {
-        Client::next_page(self, current).await
+    ) -> Result<Option<Response<Paginated<Item>, C::Extra>>> {
+        C::next_page(self, current).await
     }
 }

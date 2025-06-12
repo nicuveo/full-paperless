@@ -1,40 +1,32 @@
 #[derive(Debug)]
-pub struct Response<R> {
+pub struct Response<R, E> {
     pub value: R,
-    pub status: reqwest::StatusCode,
-    pub headers: reqwest::header::HeaderMap,
-    pub content_type: Option<String>,
+    pub extra: E,
 }
 
-impl<R> Response<R> {
+impl<R, E> Response<R, E> {
     #[must_use]
-    pub fn assign(self, item: &mut R) -> Response<()> {
+    pub fn assign(self, item: &mut R) -> Response<(), E> {
         *item = self.value;
         Response {
             value: (),
-            status: self.status,
-            headers: self.headers,
-            content_type: self.content_type,
+            extra: self.extra,
         }
     }
 
     #[must_use]
-    pub fn discard(self) -> Response<()> {
+    pub fn discard(self) -> Response<(), E> {
         Response {
             value: (),
-            status: self.status,
-            headers: self.headers,
-            content_type: self.content_type,
+            extra: self.extra,
         }
     }
 
     #[must_use]
-    pub fn replace<T>(self, value: T) -> Response<T> {
+    pub fn replace<T>(self, value: T) -> Response<T, E> {
         Response {
             value,
-            status: self.status,
-            headers: self.headers,
-            content_type: self.content_type,
+            extra: self.extra,
         }
     }
 }

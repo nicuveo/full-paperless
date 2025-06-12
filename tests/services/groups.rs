@@ -10,7 +10,7 @@ fn test_groups_crud() {
         // create
         assert_eq!(0, client.groups().list(&groups::list()).await?.value.count);
         let name = "ffjfak'dlfa#f['pw/qnf.".to_string();
-        let perms = vec![PermissionClass::UserDelete, PermissionClass::DocumentChange];
+        let mut perms = vec![PermissionClass::UserDelete, PermissionClass::DocumentChange];
         let mut item = client
             .groups()
             .create(&groups::create(name.clone(), perms.clone()))
@@ -25,25 +25,30 @@ fn test_groups_crud() {
         assert_eq!(item, item_copy);
 
         // update
-        item.permissions.push(PermissionClass::NoteAdd);
+        perms.push(PermissionClass::NoteAdd);
+        item.permissions = perms.clone();
         let item_copy = client.groups().update(&item).await?.value;
         assert_eq!(item, item_copy);
 
         // patch
-        client
+        let name = "-47r871qkds".to_string();
+        let item = client
             .groups()
-            .patch(&mut item, &groups::patch().name("-47r871qkds".to_string()))
-            .await?;
+            .patch(item.id, &groups::patch().name(name.clone()))
+            .await?
+            .value;
+        assert_eq!(name, item.name);
+        assert_eq!(perms, item.permissions);
+        assert_eq!(1, client.groups().list(&groups::list()).await?.value.count);
 
         // read
         let item_copy = client.groups().retrieve(item.id).await?.value;
         assert_eq!(item, item_copy);
 
         // delete
-        let id = item.id;
-        client.groups().destroy(item).await?;
+        client.groups().destroy(item.id).await?;
         assert_eq!(0, client.groups().list(&groups::list()).await?.value.count);
-        assert!(client.groups().retrieve(id).await.is_err());
+        assert!(client.groups().retrieve(item.id).await.is_err());
 
         Ok(())
     })

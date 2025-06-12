@@ -1,92 +1,94 @@
-use async_trait::async_trait;
-use reqwest::Method;
-
-use crate::body;
-use crate::client::Client;
+use crate::clients::Client;
 use crate::error::Result;
-use crate::params;
 use crate::response::Response;
 use crate::schema::api::document_types::{Create, List, Patch};
 use crate::schema::model::{DocumentType, Paginated};
+use crate::utils::{Method, body, params};
+use async_trait::async_trait;
 
 pub type Item = DocumentType;
 
 #[async_trait]
-pub trait DocumentTypes {
-    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>>>;
-    async fn create(&self, body: &Create) -> Result<Response<Item>>;
-    async fn retrieve(&self, id: i32) -> Result<Response<Item>>;
-    async fn update(&self, item: &Item) -> Result<Response<Item>>;
-    async fn patch(&self, item: &mut Item, body: &Patch) -> Result<Response<()>>;
-    async fn destroy(&self, item: Item) -> Result<Response<()>>;
+pub trait DocumentTypes<E>: Sized {
+    fn document_types(&self) -> &impl DocumentTypes<E> {
+        self
+    }
+
+    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
+    async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
+    async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;
+    async fn update(&self, item: &Item) -> Result<Response<Item, E>>;
+    async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, E>>;
+    async fn destroy(&self, id: i32) -> Result<Response<(), E>>;
 
     async fn previous_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>>;
+    ) -> Result<Option<Response<Paginated<Item>, E>>>;
     async fn next_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>>;
+    ) -> Result<Option<Response<Paginated<Item>, E>>>;
 }
 
 #[async_trait]
-impl DocumentTypes for Client {
-    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>>> {
+impl<C: Client> DocumentTypes<C::Extra> for C {
+    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, C::Extra>> {
         let path = "/api/document_types/";
-        let req = self.build_request(Method::GET, path, params, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self.send(Method::GET, path, params, body::NONE).await?;
         Self::decode_json(resp).await
     }
 
-    async fn create(&self, body: &Create) -> Result<Response<Item>> {
+    async fn create(&self, body: &Create) -> Result<Response<Item, C::Extra>> {
         let path = "/api/document_types/";
-        let req = self.build_request(Method::POST, path, params::NONE, body::json(body))?;
-        let resp = self.send_request(req).await?;
+        let resp = self
+            .send(Method::POST, path, params::NONE, Some(body))
+            .await?;
         Self::decode_json(resp).await
     }
 
-    async fn retrieve(&self, id: i32) -> Result<Response<Item>> {
+    async fn retrieve(&self, id: i32) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/document_types/{id}/");
         let params = vec![("full_perms", true)];
-        let req = self.build_request(Method::GET, &path, &params, body::none)?;
-        let resp = self.send_request(req).await?;
+        let resp = self.send(Method::GET, &path, &params, body::NONE).await?;
         Self::decode_json(resp).await
     }
 
-    async fn update(&self, body: &Item) -> Result<Response<Item>> {
+    async fn update(&self, body: &Item) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/document_types/{}/", body.id);
         let body = Create::from(body);
-        let req = self.build_request(Method::PUT, &path, params::NONE, body::json(&body))?;
-        let resp = self.send_request(req).await?;
+        let resp = self
+            .send(Method::PUT, &path, params::NONE, Some(&body))
+            .await?;
         Self::decode_json(resp).await
     }
 
-    async fn patch(&self, item: &mut Item, body: &Patch) -> Result<Response<()>> {
-        let path = format!("/api/document_types/{}/", item.id);
-        let req = self.build_request(Method::PATCH, &path, params::NONE, body::json(body))?;
-        let resp = Self::decode_json(self.send_request(req).await?).await?;
-        Ok(resp.assign(item))
+    async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, C::Extra>> {
+        let path = format!("/api/document_types/{id}/");
+        let resp = self
+            .send(Method::PATCH, &path, params::NONE, Some(body))
+            .await?;
+        Self::decode_json(resp).await
     }
 
-    async fn destroy(&self, item: Item) -> Result<Response<()>> {
-        let path = format!("/api/document_types/{}/", item.id);
-        let req = self.build_request(Method::DELETE, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
+    async fn destroy(&self, id: i32) -> Result<Response<(), C::Extra>> {
+        let path = format!("/api/document_types/{id}/");
+        let resp = self
+            .send(Method::DELETE, &path, params::NONE, body::NONE)
+            .await?;
         Self::ignore_content(resp)
     }
-
     async fn previous_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>> {
-        Client::previous_page(self, current).await
+    ) -> Result<Option<Response<Paginated<Item>, C::Extra>>> {
+        C::previous_page(self, current).await
     }
 
     async fn next_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>> {
-        Client::next_page(self, current).await
+    ) -> Result<Option<Response<Paginated<Item>, C::Extra>>> {
+        C::next_page(self, current).await
     }
 }
