@@ -5,7 +5,7 @@ use paper_plane::services::Groups;
 use crate::utils::client;
 
 #[test]
-fn test_groups_crud() {
+fn groups_basic_crud() {
     client::run_as_admin(async |client| {
         // create
         assert_eq!(0, client.groups().list(&groups::list()).await?.value.count);
@@ -50,6 +50,20 @@ fn test_groups_crud() {
         assert_eq!(0, client.groups().list(&groups::list()).await?.value.count);
         assert!(client.groups().retrieve(item.id).await.is_err());
 
+        Ok(())
+    })
+}
+
+#[test]
+fn groups_init_fields() {
+    client::run_as_admin(async |client| {
+        let item1 = client
+            .groups()
+            .create(&groups::create("tiwlgispqark".to_string(), vec![]))
+            .await?
+            .value;
+        let item2 = client.groups().retrieve(item1.id).await?.value;
+        assert_eq!(item1, item2);
         Ok(())
     })
 }
