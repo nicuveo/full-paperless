@@ -14,12 +14,12 @@ pub struct Correspondent {
     #[readonly]
     pub last_correspondence: Option<String>,
     #[readonly]
-    pub user_can_change: Option<bool>,
+    pub user_can_change: bool,
     pub name: String,
     #[serde(rename = "match")]
-    pub matches: Option<String>,
-    pub matching_algorithm: Option<super::MatchingAlgorithm>,
-    pub is_insensitive: Option<bool>,
-    pub owner: Option<i32>,
+    pub matches: String,
+    pub matching_algorithm: super::MatchingAlgorithm,
+    pub is_insensitive: bool,
+    pub owner: i32,
     pub permissions: super::Permissions,
 }

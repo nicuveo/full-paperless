@@ -24,10 +24,10 @@ impl From<&model::Correspondent> for Create {
     fn from(item: &model::Correspondent) -> Self {
         Self {
             name: item.name.clone(),
-            matches: item.matches.clone(),
-            matching_algorithm: item.matching_algorithm,
-            is_insensitive: item.is_insensitive,
-            owner: item.owner,
+            matches: Some(item.matches.clone()),
+            matching_algorithm: Some(item.matching_algorithm),
+            is_insensitive: Some(item.is_insensitive),
+            owner: Some(item.owner),
             set_permissions: Some(item.permissions.clone()),
         }
     }

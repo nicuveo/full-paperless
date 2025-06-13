@@ -434,9 +434,9 @@ have been "cleaned" this way yet.
 | model | cleaned of unnecessary options |
 | ----- | ------------------------------ |
 | Actor | :x: |
-| ApplicationConfiguration | :x: |
+| ApplicationConfiguration | :white_check_mark: |
 | BasicUser | :x: |
-| Correspondent | :x: |
+| Correspondent | :white_check_mark: |
 | CustomField | :x: |
 | CustomFieldInstance | :x: |
 | DocumentMetadata | :x: |
