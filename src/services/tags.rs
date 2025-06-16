@@ -9,11 +9,7 @@ use async_trait::async_trait;
 pub type Item = Tag;
 
 #[async_trait]
-pub trait Tags<E>: Sized {
-    fn tags(&self) -> &impl Tags<E> {
-        self
-    }
-
+pub trait Tags<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;

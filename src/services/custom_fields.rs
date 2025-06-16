@@ -9,11 +9,7 @@ use async_trait::async_trait;
 pub type Item = CustomField;
 
 #[async_trait]
-pub trait CustomFields<E>: Sized {
-    fn custom_fields(&self) -> &impl CustomFields<E> {
-        self
-    }
-
+pub trait CustomFields<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;

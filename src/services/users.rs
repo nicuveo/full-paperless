@@ -9,11 +9,7 @@ use async_trait::async_trait;
 pub type Item = User;
 
 #[async_trait]
-pub trait Users<E>: Sized {
-    fn users(&self) -> &impl Users<E> {
-        self
-    }
-
+pub trait Users<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;

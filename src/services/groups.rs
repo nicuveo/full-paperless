@@ -9,11 +9,7 @@ use async_trait::async_trait;
 pub type Item = Group;
 
 #[async_trait]
-pub trait Groups<E>: Sized {
-    fn groups(&self) -> &impl Groups<E> {
-        self
-    }
-
+pub trait Groups<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;

@@ -9,11 +9,7 @@ use async_trait::async_trait;
 pub type Item = MailAccount;
 
 #[async_trait]
-pub trait MailAccounts<E>: Sized {
-    fn mail_accounts(&self) -> &impl MailAccounts<E> {
-        self
-    }
-
+pub trait MailAccounts<E> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn test(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;

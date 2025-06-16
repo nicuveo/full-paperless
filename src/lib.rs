@@ -1,6 +1,6 @@
 pub mod re;
 
-pub mod authentication;
+pub mod auth;
 pub mod clients;
 pub mod error;
 pub mod response;

@@ -9,11 +9,7 @@ use async_trait::async_trait;
 pub type Item = DocumentType;
 
 #[async_trait]
-pub trait DocumentTypes<E>: Sized {
-    fn document_types(&self) -> &impl DocumentTypes<E> {
-        self
-    }
-
+pub trait DocumentTypes<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;

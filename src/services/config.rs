@@ -10,11 +10,7 @@ use crate::utils::{Method, body, params};
 pub type Item = ApplicationConfiguration;
 
 #[async_trait]
-pub trait Config<E>: Sized {
-    fn config(&self) -> &impl Config<E> {
-        self
-    }
-
+pub trait Config<E = ()> {
     async fn list(&self) -> Result<Response<Vec<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;

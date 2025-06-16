@@ -9,11 +9,7 @@ use async_trait::async_trait;
 type Item = model::Profile;
 
 #[async_trait]
-pub trait Profile<E>: Sized {
-    fn profile(&self) -> &impl Profile<E> {
-        self
-    }
-
+pub trait Profile<E = ()> {
     async fn retrieve(&self) -> Result<Response<Item, E>>;
     async fn patch(&self, body: &Patch) -> Result<Response<Item, E>>;
 }

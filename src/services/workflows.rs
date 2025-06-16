@@ -12,11 +12,7 @@ use async_trait::async_trait;
 pub type Item = Workflow;
 
 #[async_trait]
-pub trait Workflows<E>: Sized {
-    fn workflows(&self) -> &impl Workflows<E> {
-        self
-    }
-
+pub trait Workflows<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;

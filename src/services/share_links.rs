@@ -9,11 +9,7 @@ use async_trait::async_trait;
 pub type Item = ShareLink;
 
 #[async_trait]
-pub trait ShareLinks<E>: Sized {
-    fn share_links(&self) -> &impl ShareLinks<E> {
-        self
-    }
-
+pub trait ShareLinks<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;

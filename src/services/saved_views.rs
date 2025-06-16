@@ -9,11 +9,7 @@ use async_trait::async_trait;
 pub type Item = SavedView;
 
 #[async_trait]
-pub trait SavedViews<E>: Sized {
-    fn saved_views(&self) -> &impl SavedViews<E> {
-        self
-    }
-
+pub trait SavedViews<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;

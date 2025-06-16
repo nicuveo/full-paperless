@@ -5,11 +5,7 @@ use crate::utils::{Method, body, params};
 use async_trait::async_trait;
 
 #[async_trait]
-pub trait Logs<E>: Sized {
-    fn logs(&self) -> &impl Logs<E> {
-        self
-    }
-
+pub trait Logs<E = ()> {
     async fn list(&self) -> Result<Response<Vec<String>, E>>;
     async fn retrieve(&self, log_type: &str) -> Result<Response<Vec<String>, E>>;
 }

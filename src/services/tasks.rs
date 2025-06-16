@@ -11,11 +11,7 @@ use crate::utils::{Method, body, params};
 pub type Item = TaskView;
 
 #[async_trait]
-pub trait Tasks<E>: Sized {
-    fn tasks(&self) -> &impl Tasks<E> {
-        self
-    }
-
+pub trait Tasks<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Vec<Item>, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;
     async fn run(&self, body: &Create) -> Result<Response<Item, E>>;

@@ -12,11 +12,7 @@ use bytes::Bytes;
 pub type Item = Document;
 
 #[async_trait]
-pub trait Documents<E>: Sized {
-    fn documents(&self) -> &impl Documents<E> {
-        self
-    }
-
+pub trait Documents<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;
     async fn update(&self, item: &Item) -> Result<Response<Item, E>>;

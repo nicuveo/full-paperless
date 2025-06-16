@@ -1,4 +1,4 @@
-use crate::authentication::Auth;
+use crate::auth::Auth;
 use crate::error::{Error, Result};
 use crate::response;
 use crate::utils::Method;
