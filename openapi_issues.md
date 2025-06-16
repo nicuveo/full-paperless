@@ -496,6 +496,19 @@ $ ./curl GET '/api/document_types/4/?full_perms=false' | jq .
     }
   }
 }
+
+$ ./curl GET '/api/document_types/4/?full_perms' | jq .
+{
+  "id": 4,
+  "slug": "q",
+  "name": "q",
+  "match": "",
+  "matching_algorithm": 2,
+  "is_insensitive": false,
+  "document_count": 0,
+  "owner": null,
+  "user_can_change": true
+}
 ```
 
 ### Wrong schema for `POST /api/users/deactivate_totp`
@@ -533,7 +546,7 @@ Those issues describe places in the schema where a piece of information is *miss
 
 ### Fields `user_args` and `barcode_tag_mapping` have no type
 
-In all three models `ApplicationConfiguration`, `ApplicationConfigurationRequest` and `PatchedApplicationConfigurationRequest`, those items are listed without a type, as if they could be any JSON value. However, when validating a request body of type `ApplicationConfigurationRequest` or `PatchedApplicationConfigurationRequest`, those two fields are expected to be a string that can be parsed as a valid JSON value.
+In all three models `ApplicationConfiguration`, `ApplicationConfigurationRequest` and `PatchedApplicationConfigurationRequest`, those fields are listed without a type, as if they could be any JSON value. However, when validating a request body of type `ApplicationConfigurationRequest` or `PatchedApplicationConfigurationRequest`, those two fields are expected to be a string that can be parsed as a valid JSON value.
 
 ```
 $ ./curl POST '/api/config/' -d '{"user_args": {}, "barcode_tag_mapping": {}}' | jq .
@@ -658,7 +671,7 @@ It looks like the fields in the response of GET are `url`, `qr_svg`, and `secret
 
 The schema does not list a schema for the response and instead lists it as an arbitrary dictionary:
 
-```
+```yaml
 /api/profile/social_account_providers/:
   get:
     responses:
@@ -676,7 +689,7 @@ It seems to be returning an empty list in my tests, i have not managed to find a
 
 The schema does not list a schema for the response and instead lists it as an arbitrary dictionary:
 
-```
+```yaml
 /api/remote_version/:
   get:
     responses:
@@ -692,7 +705,7 @@ The schema does not list a schema for the response and instead lists it as an ar
 
 The schema does not list a schema for the response and instead lists it as an arbitrary dictionary:
 
-```
+```yaml
 /api/statistics/:
   get:
     responses:
@@ -855,36 +868,7 @@ This is quite misleading: `PATCH` is not expected to create a new value. `id` sh
 
 Beyond that, it might perhaps be simpler to represent actions and triggers as foreign keys in `Workflow`?
 
-
-### `BlankEnum` and `NullEnum` models
-
-This issue is about some fields within the following models:
-  - `ApplicationConfiguration`
-  - `ApplicationConfigurationRequest`
-  - `PatchedApplicationConfigurationRequest`
-  - `SavedView`
-  - `SavedViewRequest`
-  - `PatchedSavedViewRequest`
-
-In the aforementioned models, some fields have a peculiar type, of the form:
-
-```yaml
-output_type:
-  nullable: true
-  title: Sets the output PDF type
-  oneOf:
-  - $ref: '#/components/schemas/OutputTypeEnum'
-  - $ref: '#/components/schemas/BlankEnum'
-  - $ref: '#/components/schemas/NullEnum'
-```
-
-In `ApplicationConfiguration`, this is the case of `output_type`, `mode`, `skip_archive_file`, `unpaper_clean`, `color_conversion_strategy`. This doesn't seem to be incorrect but, if my understanding is correct, it is redundant?
-
-It looks like the intent is to accept "null entries" in addition to the values of the enum, in form of either `null` or an empty string? In which case, the `NullEnum` part is redundant due to the fields being `nullable` in the first place.
-
-<ins>_Suggestion:_</ins> remove `NullEnum`, rename `BlankEnum` to `EmptyString`.
-
-### introduce `PermissionClass` instead of `string`
+### Permissions are a `string` instead of an enum
 
 In both the `User` and `Group` model (and their associated models such as the request ones), the type of the permissions is `string`, which would suggest that *any* string is valid. It is, however, an enum, and should therefore be something along those lines:
 
@@ -972,7 +956,7 @@ The following entries are for observations that are not necessarily issues (for 
 
 ### `user_can_change` is always set to true, even if the user doesn't have `Change` permissions
 
-I don't know if this is intentional, and what that field is supposed to mean, but this feels counter-intuitive? The following commands were issued from a user who had the `add_correspondents` permissions, but not the `change_correspondents` one.
+I don't know if this is intentional, and what that field is supposed to mean, but this feels counter-intuitive? The following commands were issued from a user who had the `add_correspondents` and `add_storagepaths` permissions, but neither `change_correspondents` nor `change_storagepaths`.
 
 ```
 $ ./curl POST '/api/correspondents/' -d '{"name": "f"}' | jq .
@@ -1018,6 +1002,34 @@ I've replicated this issue on several endpoints, but I haven't tried them all. I
 The `all` field in all the `Paginated` models is declared as an `array`, but is lacking the [required `items` field](https://swagger.io/docs/specification/v3_0/data-models/data-types/#arrays) that describes the type of the elements.
 
 While this is technically a missing type in the schema, this one is a harmless mistake: it is pretty obvious from context that the type of the element is `integer`, and that `all` is a list of all primary ids. It does mess up linters and code generators, however, and seems to make the web UI unhappy (it spins for a while trying to describe the schema).
+
+### `BlankEnum` and `NullEnum` models
+
+This issue is about some fields within the following models:
+  - `ApplicationConfiguration`
+  - `ApplicationConfigurationRequest`
+  - `PatchedApplicationConfigurationRequest`
+  - `SavedView`
+  - `SavedViewRequest`
+  - `PatchedSavedViewRequest`
+
+In the aforementioned models, some fields have a peculiar type, of the form:
+
+```yaml
+output_type:
+  nullable: true
+  title: Sets the output PDF type
+  oneOf:
+  - $ref: '#/components/schemas/OutputTypeEnum'
+  - $ref: '#/components/schemas/BlankEnum'
+  - $ref: '#/components/schemas/NullEnum'
+```
+
+In `ApplicationConfiguration`, this is the case of `output_type`, `mode`, `skip_archive_file`, `unpaper_clean`, `color_conversion_strategy`. This doesn't seem to be incorrect but, if my understanding is correct, it is redundant?
+
+It looks like the intent is to accept "null entries" in addition to the values of the enum, in form of either `null` or an empty string? In which case, the `NullEnum` part is redundant due to the fields being `nullable` in the first place.
+
+<ins>_Suggestion:_</ins> remove `NullEnum`, rename `BlankEnum` to `EmptyString`.
 
 ### `number` instead of `integer`
 
@@ -1112,6 +1124,6 @@ Is this intentional?
 ### Unused models
 
 Several models are declared but are never used:
-  - `NotesRequest` (probably linked to #paperless-ngx/paperless-ngx#10147 ?)
+  - `NotesRequest` (probably linked to paperless-ngx/paperless-ngx#10147?)
   - `BasicUserRequest` (likewise?)
   - `SocialAccountRequest`
