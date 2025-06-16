@@ -1,6 +1,43 @@
 #### TOC
 
-[TOC]
+<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
+
+- [:rotating_light: CRASHES](#rotating_light-crashes)
+   * [`POST /api/config/` can't be used more than once](#post-apiconfig-cant-be-used-more-than-once)
+   * [`POST /api/mail_rules/` requires optional fields](#post-apimail_rules-requires-optional-fields)
+   * [`POST /api/saved_views` doesn't handle permissions](#post-apisaved_views-doesnt-handle-permissions)
+   * [`PATCH /api/workflow_triggers/id/`requires optional fields](#patch-apiworkflow_triggersidrequires-optional-fields)
+   * [`POST /api/ui_settings/`: invalid body crashes the server's homepage](#post-apiui_settings-invalid-body-crashes-the-servers-homepage)
+- [:x: INCORRECT](#x-incorrect)
+   * [Missing required fields in newly created models](#missing-required-fields-in-newly-created-models)
+   * [Incorrect nullability for the `last_correspondence` field in `Correspondent`](#incorrect-nullability-for-the-last_correspondence-field-in-correspondent)
+   * [`permissions` and `user_can_change` are required but mutually exclusive](#permissions-and-user_can_change-are-required-but-mutually-exclusive)
+   * [`full_perms` is listed as a boolean, but is interpreted as a string](#full_perms-is-listed-as-a-boolean-but-is-interpreted-as-a-string)
+   * [Wrong schema for `POST /api/users/deactivate_totp`](#wrong-schema-for-post-apiusersdeactivate_totp)
+- [:no_entry_sign: MISSING](#no_entry_sign-missing)
+   * [Fields `user_args` and `barcode_tag_mapping` have no type](#fields-user_args-and-barcode_tag_mapping-have-no-type)
+   * [`full_perms` is silently accepted on `POST`, `PATCH`, and `PUT` (and some `GET`)](#full_perms-is-silently-accepted-on-post-patch-and-put-and-some-get)
+   * [`StoragePath` has an undocumented `permissions` field](#storagepath-has-an-undocumented-permissions-field)
+   * [Missing response schema for `/api/profile/totp`](#missing-response-schema-for-apiprofiletotp)
+   * [Missing response schema for `GET /api/profile/social_account_providers`](#missing-response-schema-for-get-apiprofilesocial_account_providers)
+   * [Missing response schema for `GET /api/remote_version`](#missing-response-schema-for-get-apiremote_version)
+   * [Missing response schema for `GET /api/statistics`](#missing-response-schema-for-get-apistatistics)
+   * [Missing response schema for `/api/trash`](#missing-response-schema-for-apitrash)
+- [:warning: MISLEADING](#warning-misleading)
+   * [`PUT` behaves the same as `PATCH`](#put-behaves-the-same-as-patch)
+   * [`PATCH /api/workflow_triggers/{id}/` and `PATCH /api/workflow_actions/{id}` can create new values](#patch-apiworkflow_triggersid-and-patch-apiworkflow_actionsid-can-create-new-values)
+   * [`BlankEnum` and `NullEnum` models](#blankenum-and-nullenum-models)
+   * [introduce `PermissionClass` instead of `string`](#introduce-permissionclass-instead-of-string)
+- [:speech_balloon: NOTE](#speech_balloon-note)
+   * [`user_can_change` is always set to true, even if the user doesn't have `Change` permissions](#user_can_change-is-always-set-to-true-even-if-the-user-doesnt-have-change-permissions)
+   * [`all` in `Paginated{Model}List` doesn't have an inner type](#all-in-paginatedmodellist-doesnt-have-an-inner-type)
+   * [`number` instead of `integer`](#number-instead-of-integer)
+   * [Duplicated enums](#duplicated-enums)
+   * [Fields that are always created are not all labelled as required](#fields-that-are-always-created-are-not-all-labelled-as-required)
+   * [`owner` is `nullable`](#owner-is-nullable)
+   * [Unused models](#unused-models)
+
+<!-- TOC end -->
 
 ## :rotating_light: CRASHES
 
