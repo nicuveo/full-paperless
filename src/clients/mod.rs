@@ -17,7 +17,7 @@ pub mod reqwest;
 pub trait Client: Sync + Send {
     // network
 
-    type NetworkResponse: Send + Sized;
+    type IntermediateResponse: Send + Sized;
     type Extra: Send + Sized;
 
     async fn send<P, B>(
@@ -26,31 +26,27 @@ pub trait Client: Sync + Send {
         endpoint: &str,
         params: &P,
         body: Option<&B>,
-    ) -> Result<Response<Self::NetworkResponse, Self::Extra>>
+    ) -> Result<Self::IntermediateResponse>
     where
         P: Serialize + Sync,
         B: Serialize + Sync;
 
     async fn decode_json<R>(
-        response: Response<Self::NetworkResponse, Self::Extra>,
+        response: Self::IntermediateResponse,
     ) -> Result<Response<R, Self::Extra>>
     where
         R: for<'a> Deserialize<'a>;
 
     async fn decode_bytes(
-        response: Response<Self::NetworkResponse, Self::Extra>,
+        response: Self::IntermediateResponse,
     ) -> Result<Response<Bytes, Self::Extra>>;
 
-    fn ignore_content(
-        response: Response<Self::NetworkResponse, Self::Extra>,
-    ) -> Result<Response<(), Self::Extra>> {
-        Ok(response.replace(()))
-    }
-
-    async fn decode_id(response: Response<Self::NetworkResponse, Self::Extra>) -> Result<i32> {
+    async fn decode_id(response: Self::IntermediateResponse) -> Result<i32> {
         let mut fields = Self::decode_json::<HashMap<String, serde_json::Value>>(response).await?;
         Ok(serde_json::from_value(fields.value.remove("id").unwrap()).unwrap())
     }
+
+    fn ignore_content(response: Self::IntermediateResponse) -> Result<Response<(), Self::Extra>>;
 
     // pagination
 

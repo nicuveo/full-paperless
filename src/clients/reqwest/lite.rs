@@ -1,20 +1,36 @@
-use crate::auth::Auth;
-use crate::error::{Error, Result};
-use crate::response;
-use crate::utils::Method;
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::marker::Sync;
-use std::time::{Duration, SystemTime};
+
+use super::translate_method;
+use crate::auth::Auth;
+use crate::clients::Client as ClientTrait;
+use crate::error::{Error, Result};
+use crate::response;
+use crate::utils::Method;
+
+////////////////////////////////////////////////////////////////////////////////
+// Public types
 
 #[derive(Debug, Clone)]
 pub struct Client {
     inner: reqwest::Client,
     server_url: String,
     auth: Auth,
-    additional_headers: Vec<(String, String)>,
 }
+
+pub struct InternalResponse {
+    pub inner: reqwest::Response,
+    method: Method,
+    endpoint: String,
+    content_type: Option<String>,
+}
+
+pub type Response<R> = response::Response<R, ()>;
+
+////////////////////////////////////////////////////////////////////////////////
+// Public implementation
 
 impl Client {
     #[must_use]
@@ -23,46 +39,17 @@ impl Client {
             inner: reqwest::Client::new(),
             server_url,
             auth,
-            additional_headers: vec![],
         }
-    }
-
-    #[must_use]
-    pub fn with_headers(server_url: String, auth: Auth, headers: Vec<(String, String)>) -> Self {
-        Self {
-            inner: reqwest::Client::new(),
-            server_url,
-            auth,
-            additional_headers: headers,
-        }
-    }
-
-    #[must_use]
-    pub fn additional_headers(&self) -> &[(String, String)] {
-        &self.additional_headers
-    }
-
-    #[must_use]
-    pub fn additional_headers_mut(&mut self) -> &mut Vec<(String, String)> {
-        &mut self.additional_headers
     }
 }
 
-pub type Response<R> = response::Response<R, Extra>;
-
-pub struct Extra {
-    pub method: Method,
-    pub endpoint: String,
-    pub status: reqwest::StatusCode,
-    pub headers: reqwest::header::HeaderMap,
-    pub duration: Duration,
-    pub content_type: Option<String>,
-}
+////////////////////////////////////////////////////////////////////////////////
+// Traits
 
 #[async_trait]
-impl super::Client for Client {
-    type NetworkResponse = reqwest::Response;
-    type Extra = Extra;
+impl ClientTrait for Client {
+    type IntermediateResponse = InternalResponse;
+    type Extra = ();
 
     async fn send<P, B>(
         &self,
@@ -70,7 +57,7 @@ impl super::Client for Client {
         endpoint: &str,
         params: &P,
         body: Option<&B>,
-    ) -> Result<Response<reqwest::Response>>
+    ) -> Result<Self::IntermediateResponse>
     where
         B: Serialize + Sync,
         P: Serialize + Sync,
@@ -79,15 +66,12 @@ impl super::Client for Client {
         let uri = format!("{}{endpoint}", self.server_url);
         let mut request = self
             .inner
-            .request(convert(method), &uri)
+            .request(translate_method(method), &uri)
             .header(reqwest::header::ACCEPT, "application/json; version=9")
             .header(reqwest::header::AUTHORIZATION, self.auth.header_value())
             .query(params);
         if let Some(body) = body {
             request = request.json(body);
-        }
-        for (header_name, header_value) in &self.additional_headers {
-            request = request.header(header_name, header_value);
         }
         let request = request.build().map_err(|e| Error::RequestBuild {
             method,
@@ -96,7 +80,6 @@ impl super::Client for Client {
         })?;
 
         // send the request
-        let start = SystemTime::now();
         let resp = self
             .inner
             .execute(request)
@@ -108,25 +91,19 @@ impl super::Client for Client {
             })?;
 
         // validate request status
-        let duration = start.elapsed().unwrap_or(Duration::from_secs(0));
         let status = resp.status();
-        let headers = resp.headers().clone();
-        let content_type = headers
+        let content_type = resp
+            .headers()
             .get(reqwest::header::CONTENT_TYPE)
             .and_then(|h| h.to_str().ok())
             .map(String::from);
 
         match resp.error_for_status_ref() {
-            Ok(_) => Ok(Response {
-                value: resp,
-                extra: Extra {
-                    method,
-                    endpoint: endpoint.to_string(),
-                    status,
-                    headers,
-                    duration,
-                    content_type,
-                },
+            Ok(_) => Ok(InternalResponse {
+                inner: resp,
+                method,
+                endpoint: endpoint.to_string(),
+                content_type,
             }),
             Err(source) => {
                 let content = match resp.text().await {
@@ -146,68 +123,59 @@ impl super::Client for Client {
         }
     }
 
-    async fn decode_json<R>(resp: Response<reqwest::Response>) -> Result<Response<R>>
+    async fn decode_json<R>(resp: Self::IntermediateResponse) -> Result<Response<R>>
     where
         R: for<'a> Deserialize<'a>,
     {
         // validate content-type
-        if resp.extra.content_type != Some("application/json".to_string()) {
+        if resp.content_type != Some("application/json".to_string()) {
             return Err(Error::ContentType {
-                method: resp.extra.method,
-                endpoint: resp.extra.endpoint,
+                method: resp.method,
+                endpoint: resp.endpoint,
                 expected: vec!["application/json".to_string()],
-                received: resp.extra.content_type,
+                received: resp.content_type,
             });
         }
 
         // extract response data
         let content = resp
-            .value
+            .inner
             .text()
             .await
             .map_err(|source| Error::ResponseBody {
-                method: resp.extra.method,
-                endpoint: resp.extra.endpoint.clone(),
+                method: resp.method,
+                endpoint: resp.endpoint.clone(),
                 source: source.into(),
             })?;
 
         // decode the result
         let value = serde_json::from_str(&content).map_err(|source| Error::Deserializing {
-            method: resp.extra.method,
-            endpoint: resp.extra.endpoint.clone(),
+            method: resp.method,
+            endpoint: resp.endpoint.clone(),
             typename: std::any::type_name::<R>(),
             content,
             source,
         })?;
-        Ok(Response {
-            value,
-            extra: resp.extra,
-        })
+        Ok(Response { value, extra: () })
     }
 
-    async fn decode_bytes(resp: Response<reqwest::Response>) -> Result<Response<Bytes>> {
+    async fn decode_bytes(resp: Self::IntermediateResponse) -> Result<Response<Bytes>> {
         let value = resp
-            .value
+            .inner
             .bytes()
             .await
             .map_err(|source| Error::ResponseBody {
-                method: resp.extra.method,
-                endpoint: resp.extra.endpoint.clone(),
+                method: resp.method,
+                endpoint: resp.endpoint,
                 source: source.into(),
             })?;
-        Ok(Response {
-            value,
-            extra: resp.extra,
-        })
+        Ok(Response { value, extra: () })
     }
-}
 
-fn convert(method: Method) -> reqwest::Method {
-    match method {
-        Method::GET => reqwest::Method::GET,
-        Method::PUT => reqwest::Method::PUT,
-        Method::POST => reqwest::Method::POST,
-        Method::PATCH => reqwest::Method::PATCH,
-        Method::DELETE => reqwest::Method::DELETE,
+    fn ignore_content(_resp: Self::IntermediateResponse) -> Result<Response<()>> {
+        Ok(Response {
+            value: (),
+            extra: (),
+        })
     }
 }
