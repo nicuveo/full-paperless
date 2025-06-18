@@ -1,3 +1,4 @@
+use paper_plane::clients::Client;
 use paper_plane::schema::api::mail_accounts;
 use paper_plane::services::MailAccounts;
 

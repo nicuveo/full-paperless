@@ -18,17 +18,13 @@ pub trait Profile<E = ()> {
 impl<C: Client> Profile<C::Extra> for C {
     async fn retrieve(&self) -> Result<Response<Item, C::Extra>> {
         let path = "/api/profile/";
-        let resp = self
-            .send(Method::GET, path, params::NONE, body::NONE)
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, path, params::NONE, body::NONE)
+            .await
     }
 
     async fn patch(&self, body: &Patch) -> Result<Response<Item, C::Extra>> {
         let path = "/api/profile/";
-        let resp = self
-            .send(Method::PATCH, path, params::NONE, Some(body))
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::PATCH, path, params::NONE, Some(body))
+            .await
     }
 }

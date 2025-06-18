@@ -14,17 +14,13 @@ pub trait Logs<E = ()> {
 impl<C: Client> Logs<C::Extra> for C {
     async fn list(&self) -> Result<Response<Vec<String>, C::Extra>> {
         let path = "/api/logs/";
-        let resp = self
-            .send(Method::GET, path, params::NONE, body::NONE)
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, path, params::NONE, body::NONE)
+            .await
     }
 
     async fn retrieve(&self, log_type: &str) -> Result<Response<Vec<String>, C::Extra>> {
         let path = format!("/api/logs/{log_type}/");
-        let resp = self
-            .send(Method::GET, &path, params::NONE, body::NONE)
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, &path, params::NONE, body::NONE)
+            .await
     }
 }

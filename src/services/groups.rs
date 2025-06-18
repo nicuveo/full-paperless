@@ -13,7 +13,6 @@ pub trait Groups<E = ()> {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;
-    async fn update(&self, item: &Item) -> Result<Response<Item, E>>;
     async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, E>>;
     async fn destroy(&self, id: i32) -> Result<Response<(), E>>;
 
@@ -31,50 +30,34 @@ pub trait Groups<E = ()> {
 impl<C: Client> Groups<C::Extra> for C {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, C::Extra>> {
         let path = "/api/groups/";
-        let resp = self.send(Method::GET, path, params, body::NONE).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, path, params, body::NONE)
+            .await
     }
 
     async fn create(&self, body: &Create) -> Result<Response<Item, C::Extra>> {
         let path = "/api/groups/";
-        let resp = self
-            .send(Method::POST, path, params::NONE, Some(body))
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::POST, path, params::NONE, Some(body))
+            .await
     }
 
     async fn retrieve(&self, id: i32) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/groups/{id}/");
-        let resp = self
-            .send(Method::GET, &path, params::NONE, body::NONE)
-            .await?;
-        Self::decode_json(resp).await
-    }
-
-    async fn update(&self, body: &Item) -> Result<Response<Item, C::Extra>> {
-        let path = format!("/api/groups/{}/", body.id);
-        let body = Create::from(body);
-        let resp = self
-            .send(Method::PUT, &path, params::NONE, Some(&body))
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, &path, params::NONE, body::NONE)
+            .await
     }
 
     async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/groups/{id}/");
-        let resp = self
-            .send(Method::PATCH, &path, params::NONE, Some(body))
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::PATCH, &path, params::NONE, Some(body))
+            .await
     }
 
     async fn destroy(&self, id: i32) -> Result<Response<(), C::Extra>> {
         let path = format!("/api/groups/{id}/");
-        let resp = self
-            .send(Method::DELETE, &path, params::NONE, body::NONE)
-            .await?;
-        Self::ignore_content(resp)
+        self.request_unit(Method::DELETE, &path, params::NONE, body::NONE)
+            .await
     }
+
     async fn previous_page(
         &self,
         current: &Paginated<Item>,

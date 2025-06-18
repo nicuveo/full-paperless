@@ -20,13 +20,6 @@ pub struct Client {
     auth: Auth,
 }
 
-pub struct InternalResponse {
-    pub inner: reqwest::Response,
-    method: Method,
-    endpoint: String,
-    content_type: Option<String>,
-}
-
 pub type Response<R> = response::Response<R, ()>;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -44,25 +37,20 @@ impl Client {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Traits
+// Internal helpers
 
-#[async_trait]
-impl ClientTrait for Client {
-    type IntermediateResponse = InternalResponse;
-    type Extra = ();
-
-    async fn send<P, B>(
+impl Client {
+    fn build<P, B>(
         &self,
         method: Method,
         endpoint: &str,
         params: &P,
         body: Option<&B>,
-    ) -> Result<Self::IntermediateResponse>
+    ) -> Result<reqwest::Request>
     where
-        B: Serialize + Sync,
-        P: Serialize + Sync,
+        P: Serialize,
+        B: Serialize,
     {
-        // build the request
         let uri = format!("{}{endpoint}", self.server_url);
         let mut request = self
             .inner
@@ -73,13 +61,34 @@ impl ClientTrait for Client {
         if let Some(body) = body {
             request = request.json(body);
         }
-        let request = request.build().map_err(|e| Error::RequestBuild {
+        request.build().map_err(|e| Error::RequestBuild {
             method,
             endpoint: endpoint.to_string(),
             source: e.into(),
-        })?;
+        })
+    }
+}
 
-        // send the request
+////////////////////////////////////////////////////////////////////////////////
+// Traits
+
+#[async_trait]
+impl ClientTrait for Client {
+    type Extra = ();
+
+    async fn request_json<P, B, R>(
+        &self,
+        method: Method,
+        endpoint: &str,
+        params: &P,
+        body: Option<&B>,
+    ) -> Result<Response<R>>
+    where
+        B: Serialize + Sync,
+        P: Serialize + Sync,
+        R: for<'a> Deserialize<'a>,
+    {
+        let request = self.build(method, endpoint, params, body)?;
         let resp = self
             .inner
             .execute(request)
@@ -89,90 +98,144 @@ impl ClientTrait for Client {
                 endpoint: endpoint.to_string(),
                 source: source.into(),
             })?;
-
-        // validate request status
         let status = resp.status();
-        let content_type = resp
-            .headers()
+        let headers = resp.headers().clone();
+        let content_type = headers
             .get(reqwest::header::CONTENT_TYPE)
             .and_then(|h| h.to_str().ok())
             .map(String::from);
 
-        match resp.error_for_status_ref() {
-            Ok(_) => Ok(InternalResponse {
-                inner: resp,
+        if let Err(source) = resp.error_for_status_ref() {
+            let content = match resp.text().await {
+                Err(_) => serde_json::Value::String("<failed to retrieve content>".to_string()),
+                Ok(content) => {
+                    serde_json::from_str(&content).unwrap_or(serde_json::Value::String(content))
+                }
+            };
+            return Err(Error::Server {
                 method,
                 endpoint: endpoint.to_string(),
-                content_type,
-            }),
-            Err(source) => {
-                let content = match resp.text().await {
-                    Err(_) => serde_json::Value::String("<failed to retrieve content>".to_string()),
-                    Ok(content) => {
-                        serde_json::from_str(&content).unwrap_or(serde_json::Value::String(content))
-                    }
-                };
-                Err(Error::Server {
-                    method,
-                    endpoint: endpoint.to_string(),
-                    status: format!("{status}"),
-                    content,
-                    source: source.into(),
-                })
-            }
-        }
-    }
-
-    async fn decode_json<R>(resp: Self::IntermediateResponse) -> Result<Response<R>>
-    where
-        R: for<'a> Deserialize<'a>,
-    {
-        // validate content-type
-        if resp.content_type != Some("application/json".to_string()) {
-            return Err(Error::ContentType {
-                method: resp.method,
-                endpoint: resp.endpoint,
-                expected: vec!["application/json".to_string()],
-                received: resp.content_type,
+                status: format!("{status}"),
+                content,
+                source: source.into(),
             });
         }
 
-        // extract response data
-        let content = resp
-            .inner
-            .text()
-            .await
-            .map_err(|source| Error::ResponseBody {
-                method: resp.method,
-                endpoint: resp.endpoint.clone(),
-                source: source.into(),
-            })?;
+        if content_type != Some("application/json".to_string()) {
+            return Err(Error::ContentType {
+                method,
+                endpoint: endpoint.to_string(),
+                expected: vec!["application/json".to_string()],
+                received: content_type,
+            });
+        }
 
-        // decode the result
-        let value = serde_json::from_str(&content).map_err(|source| Error::Deserializing {
-            method: resp.method,
-            endpoint: resp.endpoint.clone(),
-            typename: std::any::type_name::<R>(),
-            content,
-            source,
+        let content = resp.text().await.map_err(|source| Error::ResponseBody {
+            method,
+            endpoint: endpoint.to_string(),
+            source: source.into(),
         })?;
-        Ok(Response { value, extra: () })
+
+        Ok(Response {
+            value: serde_json::from_str(&content).map_err(|source| Error::Deserializing {
+                method,
+                endpoint: endpoint.to_string(),
+                typename: std::any::type_name::<R>(),
+                content,
+                source,
+            })?,
+            extra: (),
+        })
     }
 
-    async fn decode_bytes(resp: Self::IntermediateResponse) -> Result<Response<Bytes>> {
-        let value = resp
+    async fn request_bytes<P, B>(
+        &self,
+        method: Method,
+        endpoint: &str,
+        params: &P,
+        body: Option<&B>,
+    ) -> Result<Response<Bytes>>
+    where
+        P: Serialize + Sync,
+        B: Serialize + Sync,
+    {
+        let request = self.build(method, endpoint, params, body)?;
+        let resp = self
             .inner
-            .bytes()
+            .execute(request)
             .await
-            .map_err(|source| Error::ResponseBody {
-                method: resp.method,
-                endpoint: resp.endpoint,
+            .map_err(|source| Error::RequestSend {
+                method,
+                endpoint: endpoint.to_string(),
                 source: source.into(),
             })?;
-        Ok(Response { value, extra: () })
+        let status = resp.status();
+
+        if let Err(source) = resp.error_for_status_ref() {
+            let content = match resp.text().await {
+                Err(_) => serde_json::Value::String("<failed to retrieve content>".to_string()),
+                Ok(content) => {
+                    serde_json::from_str(&content).unwrap_or(serde_json::Value::String(content))
+                }
+            };
+            return Err(Error::Server {
+                method,
+                endpoint: endpoint.to_string(),
+                status: format!("{status}"),
+                content,
+                source: source.into(),
+            });
+        }
+
+        Ok(Response {
+            value: resp.bytes().await.map_err(|source| Error::ResponseBody {
+                method,
+                endpoint: endpoint.to_string(),
+                source: source.into(),
+            })?,
+            extra: (),
+        })
     }
 
-    fn ignore_content(_resp: Self::IntermediateResponse) -> Result<Response<()>> {
+    async fn request_unit<P, B>(
+        &self,
+        method: Method,
+        endpoint: &str,
+        params: &P,
+        body: Option<&B>,
+    ) -> Result<Response<()>>
+    where
+        P: Serialize + Sync,
+        B: Serialize + Sync,
+    {
+        let request = self.build(method, endpoint, params, body)?;
+        let resp = self
+            .inner
+            .execute(request)
+            .await
+            .map_err(|source| Error::RequestSend {
+                method,
+                endpoint: endpoint.to_string(),
+                source: source.into(),
+            })?;
+        let status = resp.status();
+
+        if let Err(source) = resp.error_for_status_ref() {
+            let content = match resp.text().await {
+                Err(_) => serde_json::Value::String("<failed to retrieve content>".to_string()),
+                Ok(content) => {
+                    serde_json::from_str(&content).unwrap_or(serde_json::Value::String(content))
+                }
+            };
+            return Err(Error::Server {
+                method,
+                endpoint: endpoint.to_string(),
+                status: format!("{status}"),
+                content,
+                source: source.into(),
+            });
+        }
+
         Ok(Response {
             value: (),
             extra: (),

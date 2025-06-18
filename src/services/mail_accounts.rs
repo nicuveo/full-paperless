@@ -14,7 +14,6 @@ pub trait MailAccounts<E> {
     async fn test(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
     async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;
-    async fn update(&self, item: &Item) -> Result<Response<Item, E>>;
     async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, E>>;
     async fn destroy(&self, id: i32) -> Result<Response<(), E>>;
     async fn process(&self, id: i32) -> Result<Response<(), E>>;
@@ -33,66 +32,46 @@ pub trait MailAccounts<E> {
 impl<C: Client> MailAccounts<C::Extra> for C {
     async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, C::Extra>> {
         let path = "/api/mail_accounts/";
-        let resp = self.send(Method::GET, path, params, body::NONE).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, path, params, body::NONE)
+            .await
     }
 
     async fn test(&self, body: &Create) -> Result<Response<Item, C::Extra>> {
         let path = "/api/mail_accounts/";
-        let resp = self
-            .send(Method::POST, path, params::NONE, Some(body))
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::POST, path, params::NONE, Some(body))
+            .await
     }
 
     async fn create(&self, body: &Create) -> Result<Response<Item, C::Extra>> {
         let path = "/api/mail_accounts/";
-        let resp = self
-            .send(Method::POST, path, params::NONE, Some(body))
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::POST, path, params::NONE, Some(body))
+            .await
     }
 
     async fn retrieve(&self, id: i32) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/mail_accounts/{id}/");
-        let resp = self
-            .send(Method::GET, &path, params::NONE, body::NONE)
-            .await?;
-        Self::decode_json(resp).await
-    }
-
-    async fn update(&self, body: &Item) -> Result<Response<Item, C::Extra>> {
-        let path = format!("/api/mail_accounts/{}/", body.id);
-        let body = Create::from(body);
-        let resp = self
-            .send(Method::PUT, &path, params::NONE, Some(&body))
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, &path, params::NONE, body::NONE)
+            .await
     }
 
     async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/mail_accounts/{id}/");
-        let resp = self
-            .send(Method::PATCH, &path, params::NONE, Some(body))
-            .await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::PATCH, &path, params::NONE, Some(body))
+            .await
     }
 
     async fn destroy(&self, id: i32) -> Result<Response<(), C::Extra>> {
         let path = format!("/api/mail_accounts/{id}/");
-        let resp = self
-            .send(Method::DELETE, &path, params::NONE, body::NONE)
-            .await?;
-        Self::ignore_content(resp)
+        self.request_unit(Method::DELETE, &path, params::NONE, body::NONE)
+            .await
     }
 
     async fn process(&self, id: i32) -> Result<Response<(), C::Extra>> {
         let path = format!("/api/mail_accounts/{id}/process/");
-        let resp = self
-            .send(Method::POST, &path, params::NONE, body::NONE)
-            .await?;
-        Self::ignore_content(resp)
+        self.request_unit(Method::POST, &path, params::NONE, body::NONE)
+            .await
     }
+
     async fn previous_page(
         &self,
         current: &Paginated<Item>,

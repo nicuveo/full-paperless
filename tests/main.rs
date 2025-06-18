@@ -13,6 +13,27 @@ fn init_docker() -> DockerComposeCmd {
     DockerComposeCmd::new("tests/docker/docker-compose.yml", "tests/docker/logs")
 }
 
+mod doc {
+    use paper_plane::clients::{Client as CT, reqwest::lite::Client};
+    use paper_plane::{auth::Auth, services};
+
+    // services for your application
+    struct Services {
+        // access to the "Documents" service
+        paperless: Box<dyn services::Documents>,
+    }
+
+    fn get_prod_services() -> Services {
+        let url = std::env::var("PAPERLESS_URL").unwrap();
+        let tok = std::env::var("PAPERLESS_TOKEN").unwrap();
+        let paperless_client = Client::new(url, Auth::Token(tok.into()));
+
+        Services {
+            paperless: Box::new(paperless_client),
+        }
+    }
+}
+
 pub fn main() {
     let docker_service = init_docker();
 

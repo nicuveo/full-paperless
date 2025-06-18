@@ -1,3 +1,4 @@
+use paper_plane::clients::Client;
 use paper_plane::schema::api::groups;
 use paper_plane::schema::model::PermissionClass;
 use paper_plane::services::Groups;

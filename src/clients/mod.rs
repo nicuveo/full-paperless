@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::marker::Sync;
 
 use crate::error::Result;
@@ -10,43 +9,54 @@ use crate::schema::model::Paginated;
 use crate::services;
 use crate::utils::{Method, body, extract_params};
 
+////////////////////////////////////////////////////////////////////////////////
+// Public implementations
+
 #[cfg(feature = "reqwest")]
 pub mod reqwest;
 
+////////////////////////////////////////////////////////////////////////////////
+// Public trait
+
 #[async_trait]
-pub trait Client: Sync + Send {
+pub trait Client: Sized + Sync {
     // network
 
-    type IntermediateResponse: Send + Sized;
-    type Extra: Send + Sized;
+    type Extra;
 
-    async fn send<P, B>(
+    async fn request_json<P, B, R>(
         &self,
         method: Method,
         endpoint: &str,
         params: &P,
         body: Option<&B>,
-    ) -> Result<Self::IntermediateResponse>
+    ) -> Result<Response<R, Self::Extra>>
+    where
+        P: Serialize + Sync,
+        B: Serialize + Sync,
+        R: for<'a> Deserialize<'a>;
+
+    async fn request_bytes<P, B>(
+        &self,
+        method: Method,
+        endpoint: &str,
+        params: &P,
+        body: Option<&B>,
+    ) -> Result<Response<Bytes, Self::Extra>>
     where
         P: Serialize + Sync,
         B: Serialize + Sync;
 
-    async fn decode_json<R>(
-        response: Self::IntermediateResponse,
-    ) -> Result<Response<R, Self::Extra>>
+    async fn request_unit<P, B>(
+        &self,
+        method: Method,
+        endpoint: &str,
+        params: &P,
+        body: Option<&B>,
+    ) -> Result<Response<(), Self::Extra>>
     where
-        R: for<'a> Deserialize<'a>;
-
-    async fn decode_bytes(
-        response: Self::IntermediateResponse,
-    ) -> Result<Response<Bytes, Self::Extra>>;
-
-    async fn decode_id(response: Self::IntermediateResponse) -> Result<i32> {
-        let mut fields = Self::decode_json::<HashMap<String, serde_json::Value>>(response).await?;
-        Ok(serde_json::from_value(fields.value.remove("id").unwrap()).unwrap())
-    }
-
-    fn ignore_content(response: Self::IntermediateResponse) -> Result<Response<(), Self::Extra>>;
+        P: Serialize + Sync,
+        B: Serialize + Sync;
 
     // pagination
 
@@ -58,10 +68,9 @@ pub trait Client: Sync + Send {
         T: for<'a> Deserialize<'a> + Sync,
     {
         if let Some(url) = current.raw_previous_url() {
-            let resp = self
-                .send(Method::GET, url.path(), &extract_params(url), body::NONE)
-                .await?;
-            Self::decode_json(resp).await.map(Some)
+            self.request_json(Method::GET, url.path(), &extract_params(url), body::NONE)
+                .await
+                .map(Some)
         } else {
             Ok(None)
         }
@@ -75,10 +84,9 @@ pub trait Client: Sync + Send {
         T: for<'a> Deserialize<'a> + Sync,
     {
         if let Some(url) = current.raw_next_url() {
-            let resp = self
-                .send(Method::GET, url.path(), &extract_params(url), body::NONE)
-                .await?;
-            Self::decode_json(resp).await.map(Some)
+            self.request_json(Method::GET, url.path(), &extract_params(url), body::NONE)
+                .await
+                .map(Some)
         } else {
             Ok(None)
         }

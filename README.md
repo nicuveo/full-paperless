@@ -46,23 +46,24 @@ The API of this library is divided into a series of services, that map almost
 one-to-one with the corresponding path segment of the underlying REST API: the
 `Config` service maps to `/api/config/`, `Users` maps to `/api/users/`, and so
 on. Each service is a distinct [async
-trait](https://docs.rs/async-trait/latest/async_trait/), all implemented by the
-`Client`. This allows to restrict a piece of code to a given subset of the API,
-and it makes it easier to implement mocks, since a mock doesn't have to cover
-the full API but only the relevant subsection.
+trait](https://docs.rs/async-trait/latest/async_trait/), all implemented by a
+given `Client`. This allows users to restrict a piece of code to a given subset
+of the API, and it makes it easier to then implement mocks: a given mock only
+needs to implement its relevant subset of the API.
 
 ```rust
-use paper_plane::{Auth, Client, services};
+use paper_plane::{auth::Auth, services};
+use paper_plane::clients::reqwest::lite::Client;
 
-// services for your application
+// application services
 struct Services {
-    // access to the "Documents" service
-    paper_plane: Box<dyn services::Documents>,
+    // access to the "Documents" API
+    paperless: Box<dyn services::Documents>,
 }
 
 fn get_prod_services() -> Services {
-    let url = std::env::var("PAPERLESS_URL").expect();
-    let tok = std::env::var("PAPERLESS_TOKEN").expect();
+    let url = std::env::var("PAPERLESS_URL").unwrap();
+    let tok = std::env::var("PAPERLESS_TOKEN").unwrap();
     let paperless_client = Client::new(url, Auth::Token(tok.into()));
 
     Services {
@@ -81,21 +82,19 @@ fn get_test_services() -> Services {
         paperless: Box::new(MockService::new()),
     }
 }
-
 ```
 
 ### Service API
 
-Most services implement the following functions, for a given `Item` model they
-operate on (`User` for the `Users` service, for instance):
+Most services implement the following functions for the `Item` model they
+operate on (for instance, in the `Users` service, this `Item` is `User`):
 
 ```rust
-async fn list(&self, params: &List) -> Result<Response<Paginated<Item>>>;
-async fn create(&self, body: &Create) -> Result<Response<Item>>;
-async fn retrieve(&self, id: i32) -> Result<Response<Item>>;
-async fn update(&self, item: &Item) -> Result<Response<Item>>;
-async fn patch(&self, item: &mut Item, body: &Patch) -> Result<Response<()>>;
-async fn destroy(&self, item: Item) -> Result<Response<()>>;
+async fn list    (&self, params: &List  ) -> Result<Response<Paginated<Item>>>;
+async fn create  (&self, body:   &Create) -> Result<Response<Item>>;
+async fn retrieve(&self, id:     i32    ) -> Result<Response<Item>>;
+async fn patch   (&self, body:   &Patch ) -> Result<Response<Item>>;
+async fn destroy (&self, id:     i32    ) -> Result<Response<()>>;
 
 async fn previous_page(
     &self,
@@ -163,61 +162,28 @@ async fn print_all_share_links(client: &Client) -> Result<()> {
         }
     }
 }
-
 ```
 
 ### Making changes
 
-For most services, there are two ways to make changes to a model: `update` and
-`patch`.
-
-#### Update
-
-Fields that are not within a user's control, such as a model's internal id, are
-public in the model but decorated with `[readonly]`. All other fields can be
-modified. To persist any change made to such fields, the `update` series of
-functions can be used: they commit the current state of the model to paperless,
-replacing the previous version.
-
-> :warning: If any field is missing in the local model, it will therefore be
-> *erased* in the remote one upon update. This library tries to prevent this
-> from happening, by always fetching every field of a model on every operation
-> or by manually filling missing fields (see [Limitations](#limitations)), but
-> until it has been more battle-tested, this is a likely source of issues.
+The API only supports applying patches, partial updates. On success, the
+modified item is being returned.
 
 ```rust
 async fn disable_workflow(client: &Client, id: i32) -> Result<()> {
     let mut workflow = client().workflows().retrieve(id).await?.value;
     if workflow.enabled {
-        workflow.enabled = false;
-        client().workflows().update(&workflow).await?;
-    }
-}
-```
-
-#### Patch
-
-> :information_source: At the moment, it is not possible to use `patch` without
-> having the corresponding `View` permissions to obtain the item in the first
-> place (see the [Remaining work](#remaining-work) section).
-
-Instead of replacing the entire remote value, the `patch` functions apply a set
-of modifications. The local object is only updated if the network operation
-succeeds. The previous example could be rewritten as follows.
-
-```rust
-async fn disable_workflow(client: &Client, id: i32) -> Result<()> {
-    let mut workflow = client().workflows().retrieve(id).await?.value;
-    if workflow.enabled {
-        client()
+        workflow = client()
             .workflows()
-            .patch(&mut workflow, api::workflows::patch().enabled(false))
+            .patch(&api::workflows::patch().enabled(false))
             .await?;
     }
 }
 ```
 
-### Networking details
+### Network implementation
+
+All of the network layer is behind a trait: `Client`.
 
 While `paper_plane` abstracts away the network layer, the interface it provides
 is "leaky" on purpose, allowing users to gain access to the relevant

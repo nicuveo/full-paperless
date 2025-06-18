@@ -1,3 +1,4 @@
+use paper_plane::clients::Client;
 use paper_plane::schema::api::correspondents;
 use paper_plane::services::Correspondents;
 
@@ -27,8 +28,8 @@ fn correspondents_basic_crud() {
             .await?
             .value;
         assert_eq!(name, item.name);
-        assert_eq!(Some(false), item.is_insensitive);
-        assert_eq!(Some("foo".to_string()), item.matches);
+        assert_eq!(false, item.is_insensitive);
+        assert_eq!("foo".to_string(), item.matches);
         assert_eq!(
             1,
             client
@@ -44,7 +45,7 @@ fn correspondents_basic_crud() {
         assert_eq!(item, item_copy);
 
         // update
-        item.is_insensitive = Some(true);
+        item.is_insensitive = true;
         let item_copy = client.correspondents().update(&item).await?.value;
         assert_eq!(item, item_copy);
 
@@ -56,8 +57,8 @@ fn correspondents_basic_crud() {
             .await?
             .value;
         assert_eq!(name, item.name);
-        assert_eq!(Some(true), item.is_insensitive);
-        assert_eq!(Some("foo".to_string()), item.matches);
+        assert_eq!(true, item.is_insensitive);
+        assert_eq!("foo".to_string(), item.matches);
         assert_eq!(
             1,
             client
