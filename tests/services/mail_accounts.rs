@@ -21,7 +21,7 @@ fn test_mail_accounts_basic_crud() {
         let name = "ffjfak'dlfa#f['pw/qnf.".to_string();
         let username = "iu8y1r7ohj028twilidh92".to_string();
         let password = "hfo78yp98;ihddslabf0pi".to_string();
-        let mut item = client
+        let item = client
             .mail_accounts()
             .create(&mail_accounts::create(
                 name.clone(),
@@ -49,12 +49,6 @@ fn test_mail_accounts_basic_crud() {
         let item_copy = client.mail_accounts().retrieve(item.id).await?.value;
         assert_eq!(item, item_copy);
 
-        // update
-        let name = "-47r871qkds".to_string();
-        item.name = name.clone();
-        let item_copy = client.mail_accounts().update(&item).await?.value;
-        assert_eq!(item, item_copy);
-
         // patch
         let username = "vrcelesiawhlhqt".to_string();
         let password = "vrcelesiawhlhqt".to_string();
@@ -68,7 +62,6 @@ fn test_mail_accounts_basic_crud() {
             )
             .await?
             .value;
-        assert_eq!(name, item.name);
         assert_eq!(imap, item.imap_server);
         assert_eq!(username, item.username);
         assert_eq!(password, item.password);

@@ -1,42 +1,32 @@
 # Paper Plane :card_index_dividers:
 
-An unofficial rich client for [paperless-ngx](https://docs.paperless-ngx.com/),
-based on its REST API. The goal of this project is to provide a feature-complete
-API to manage a paperless-ngx instance while also providing an abstraction layer
-that reduces the risk of misuse.
-
-It is a fully async library and is meant to be used with a
-[tokio](https://tokio.rs) runtime.
+Paper Plane is an unofficial client for
+[paperless-ngx](https://docs.paperless-ngx.com/), that provides a thin type-safe
+interface above its REST API. It is a fully async library and is meant to be
+used with a [tokio](https://tokio.rs) runtime.
 
 > :warning: This is a work in progress. See the [Remaining
 > work](#remaining-work) section.
 
 #### TOC
 
+<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
+
 - [Overview](#overview)
    * [Service API](#service-api)
    * [Pagination](#pagination)
    * [Making changes](#making-changes)
-      + [Update](#update)
-      + [Patch](#patch)
-   * [Networking details](#networking-details)
-      + [Additional request headers](#additional-request-headers)
-      + [Response info](#response-info)
-      + [Manual requests](#manual-requests)
-      + [Re-exports](#re-exports)
+   * [Network implementation](#network-implementation)
+   * [Re-exports](#re-exports)
 - [Limitations](#limitations)
-   * [Correspondents creation requires read permissions](#correspondents-creation-requires-read-permissions)
-   * [Workflow trigger patching requires read permissions](#workflow-trigger-patching-requires-read-permissions)
 - [Remaining work](#remaining-work)
    * [Library design](#library-design)
-      + [Service references](#service-references)
-      + [Service commands](#service-commands)
-      + [`reqwest` middleware](#reqwest-middleware)
-      + [Ties to `tokio`](#ties-to-tokio)
-      + [`From` / `Into` traits and ownership](#from-into-traits-and-ownership)
+      + [`From` / `Into` traits and ownership](#from--into-traits-and-ownership)
       + [Provide mocks](#provide-mocks)
    * [Missing features](#missing-features)
    * [Default values](#default-values)
+
+<!-- TOC end -->
 
 ----
 
@@ -111,8 +101,7 @@ module of `paper_plane::schema::api`. For instance, to create a new document
 type, one can do the following:
 
 ```rust
-use paper_plane::schema::api;
-use paper_plane::schema::model;
+use paper_plane::schema::{api, model};
 
 async fn new_doc_type(client: &Client) -> Result<()> {
     client
@@ -130,10 +119,10 @@ async fn new_doc_type(client: &Client) -> Result<()> {
 The argument isn't consumed by the action and can be reused.
 
 ```rust
-async fn reassign(client: &Client, docs: &mut [Document], new_owner: i32) -> Result<()> {
+async fn reassign(client: &Client, docs: &[Document], new_owner: i32) -> Result<()> {
     let patch = api::documents::patch().owner(new_owner);
     for doc in docs {
-        client.documents().patch(doc, &patch).await?;
+        client.documents().patch(doc.id, &patch).await?;
     }
 }
 ```
@@ -146,9 +135,8 @@ service's `previous_page` and `next_page` functions to fetch the corresponding
 pages using the same parameters as the original `list` call.
 
 ```rust
-async fn print_all_share_links(client: &Client) -> Result<()> {
-    let mut current_page = client
-        .share_links()
+async fn print_all_share_links(service: &impl services::ShareLinks) -> Result<()> {
+    let mut current_page = service
         .list(api::share_links::list())
         .await?
         .value;
@@ -156,7 +144,7 @@ async fn print_all_share_links(client: &Client) -> Result<()> {
         for link in &current_page.results {
             println!("{link:?}");
         }
-        match client.share_links().next_page(&current_page).await?.value {
+        match service.next_page(&current_page).await?.value {
             Some(next_page) => current_page = next_page,
             None => break,
         }
@@ -183,79 +171,60 @@ async fn disable_workflow(client: &Client, id: i32) -> Result<()> {
 
 ### Network implementation
 
-All of the network layer is behind a trait: `Client`.
+All of the network layer is behind a trait: `Client`. With the `reqwest` feature
+enabled, the library ships with two implementations of the trait:
+`clients::reqwest::Client` and `clients::reqwest::lite::Client`; the difference
+between them is the `Extra` associated type: an implementation of `Client` can
+choose how much extra information to return alongside the result of a
+request. The "lite" client does not return anything but `()`, while the full
+`reqwest` client returns headers, duration, and so on.
 
-While `paper_plane` abstracts away the network layer, the interface it provides
-is "leaky" on purpose, allowing users to gain access to the relevant
-implementation details.
+If you have more specific needs, such as wanting to use a [reqwest
+middleware](https://crates.io/crates/reqwest-middleware/), you can use your own
+implementation of `Client`: all services have a blanket implementation for all
+types that implement `Client`, meaning that implementing a new `Client` is all
+you need to have access to all of this library's features.
 
-#### Additional request headers
-
-The client maintains a list of additional headers to add to each request. For
-instance, if you want to provide a custom `User-Agent`, you can initialize the
-client like so:
-
-```rust
-let client = paper_plane::Client::with_headers(
-    paperless_url,
-    paperless_auth,
-    vec![("User-Agent".to_string(), "my-client".to_string())],
-);
-```
-
-#### Response info
-
-Each API call's response is wrapped in a `Response` type that includes more
-information besides the parsed result: it contains a copy of all the response
-headers and the status code.
-
-#### Manual requests
-
-All service functions are implemented using functions of the client, meaning
-that it is always possible to bypass the services and manually implement a
-specific call, if needed. For instance, the `Users` services's `create` function
-is implemented like this:
-
-```rust
-async fn create(&self, body: &Create) -> Result<Response<Item>> {
-    let path = "/api/users/";
-    let req: reqwest::Reqwest =
-        self.build_request(Method::POST, path, params::NONE, body::json(body))?;
-    let resp: request::Response =
-        self.send_request(req).await?;
-    Self::decode_json(resp).await
-}
-```
-
-#### Re-exports
+### Re-exports
 
 Several dependencies of this library are re-rexported under `paper_plane:re`,
-such as `reqwest`: this allows you to have full access to the specific version
-used by `paper_plane`, even if your project depends on another version.
+such as `bytes`, and `reqwest` if the corresponding feature is enabled. This
+allows you to have full access to the specific version used by `paper_plane`,
+even if your project depends on another version.
 
 ----
 
 ## Limitations
 
-Small issues in the underlying REST API result in some limitation on this library's
-side. A list of all issues in the API can be found here (TODO).
+The design of the REST API results in limitations on this library's side, the
+biggest one being that it's not truly possible to use the REST API to maintain a
+*complete* copy of the models client-side: not all fields are guaranteed to be
+present with every request.
 
-### Correspondents creation requires read permissions
+For instance, regarding permissions, most of the API supports a query parameter
+named `full_perms`, that decides whether the result contains a single
+`user_can_change` field (the semantics of which are somewhat unclear) or a
+detailed `permissions` field. It is not possible to have *both*. This library
+makes the choice to always supply `full_perms` on the user's behalf to attempt
+to always have the most complete version of the model.
 
-This library aims at always keeping a complete version of the model client-side
-to avoid `update` accidentally deleting fields. The `/api/correspondents/`
-endpoint, however, does not return a full model on creation, missing several of
-the model's required fields. As a workaround, the `create` function issues a
-`retrieve` immediately afterwards to get the full object.
+Likewise, it is currently not feasible to provide a way to *fully* override a
+model. Despite the fact that the API provides endpoints of the form `PUT
+/api/{type}/{id}/`, the model that is being sent in the request body is not used
+to override the existing one, but used instead to apply partial updates; meaning
+that omitting fields will not reset them to their default values / unset them.
 
-### Workflow trigger patching requires read permissions
+Beyond this, several endpoints cannot be implemented yet, as there is no
+documentation for them and the OpenAPI schema is not always in sync with the
+behaviour of the API.
 
-For similar reasons, patching a workflow cannot be done without read access: the
-endpoint for a call to `PATCH /api/workflow_triggers/{id}/` performs the same
-checks as a call to `create` or `update`, and therefore rejects a patch that
-doesn't contain all the required fields, or even fails with a 500. As a
-workaround, the library inserts all those fields in a call to patch, but this
-requires having a local copy of the model in the first place.
+As a result, this library doesn't attempt to provide rich semantics on top of
+the REST API, and instead aims at being a lightweight type-safe layer on top of
+it.
+
+For more details: all issues that were found with the REST API as part of the
+development of this project have been collected in [one big
+issue](paperless-ngx/paperless-ngx#10195) on paperless-ngx's repo.
 
 ----
 
@@ -269,76 +238,6 @@ that remains before a first version can be released. See also the
 
 The library's design has not been finalized yet; this section details some of
 the choices being questioned and changes being considered.
-
-#### Service references
-
-At time of writing, the API uses Rust references to ensure that the local model
-does not deviate from the remote one. There are two areas where this is an issue:
-
-- `patch` functions require a mutable reference to the model, in order to apply
-  the mutation to the local object if the network request succeeds; this makes
-  it impossible to use the `patch` API if the user doesn't also have `read`
-  access to the model in the first place.
-- `destroy` functions take ownership of the object being destroyed, in order to
-  prevent uses of the local model. if a network issue happens, the local model
-  is gone while the remote one is still there.
-
-It might be preferable to relax this API and have `patch` and `destroy` take the
-object's id as an argument instead. It moves some of the responsibility of
-maintaining the local models to the user, but would improve both the reliability
-and the versatility of the library.
-
-However, the `Workflow` service might retain some of this
-reference-based API, just to always ensure that actions and triggers
-are always created / updated in the context of their workflow, and not
-in isolation.
-
-#### Service commands
-
-At the moment, there's a bit of repetition between the functions of a service
-and their arguments: a call to `service.create` requires giving it a
-`api::service::Create` argument. Would it be better for each service to just
-take a `api::service::Command` instead, and to provide only one function named
-`execute`?
-
-For comparison:
-
-```rust
-async fn current(client: &Client) -> Result<()> {
-    client
-        .document_types()
-        .create(&api::document_types::create("bank statement"))
-        .await?;
-}
-
-async fn proposed(client: &Client) -> Result<()> {
-    client
-        .document_types()
-        .execute(&api::document_types::create("bank statement"))
-        .await?;
-}
-```
-
-The downside is that it would make the documentation a lot less readable: since
-each operation returns a different type, this would require a trait for each
-service, and would probably mean making it more difficult to implement mocks.
-
-#### `reqwest` middleware
-
-There is no way at the moment for a user to use
-[`reqwest-middleware`](https://crates.io/crates/reqwest-middleware) to modify
-reqwest's behaviour. It might be worth looking into it: would it be enough to
-offer an alternative `Client` constructor?
-
-More generally, what can be done to allow customisation of the network layer?
-Perhaps implement a `Client` trait and make the current implementation of the
-services work for any such `Client`?
-
-#### Ties to `tokio`
-
-Can the library be used with another runtime library such as
-[`smol`](https://crates.io/crates/smol), or do some of the implementation
-details bind it to `tokio`?
 
 #### `From` / `Into` traits and ownership
 

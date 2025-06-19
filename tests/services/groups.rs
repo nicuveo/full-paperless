@@ -11,8 +11,8 @@ fn groups_basic_crud() {
         // create
         assert_eq!(0, client.groups().list(&groups::list()).await?.value.count);
         let name = "ffjfak'dlfa#f['pw/qnf.".to_string();
-        let mut perms = vec![PermissionClass::UserDelete, PermissionClass::DocumentChange];
-        let mut item = client
+        let perms = vec![PermissionClass::UserDelete, PermissionClass::DocumentChange];
+        let item = client
             .groups()
             .create(&groups::create(name.clone(), perms.clone()))
             .await?
@@ -25,12 +25,6 @@ fn groups_basic_crud() {
         let item_copy = client.groups().retrieve(item.id).await?.value;
         assert_eq!(item, item_copy);
 
-        // update
-        perms.push(PermissionClass::NoteAdd);
-        item.permissions = perms.clone();
-        let item_copy = client.groups().update(&item).await?.value;
-        assert_eq!(item, item_copy);
-
         // patch
         let name = "-47r871qkds".to_string();
         let item = client
@@ -39,7 +33,6 @@ fn groups_basic_crud() {
             .await?
             .value;
         assert_eq!(name, item.name);
-        assert_eq!(perms, item.permissions);
         assert_eq!(1, client.groups().list(&groups::list()).await?.value.count);
 
         // read

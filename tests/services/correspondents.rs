@@ -18,7 +18,7 @@ fn correspondents_basic_crud() {
                 .count
         );
         let name = "ffjfak'dlfa#f['pw/qnf.".to_string();
-        let mut item = client
+        let item = client
             .correspondents()
             .create(
                 &correspondents::create(name.clone())
@@ -44,11 +44,6 @@ fn correspondents_basic_crud() {
         let item_copy = client.correspondents().retrieve(item.id).await?.value;
         assert_eq!(item, item_copy);
 
-        // update
-        item.is_insensitive = true;
-        let item_copy = client.correspondents().update(&item).await?.value;
-        assert_eq!(item, item_copy);
-
         // patch
         let name = "-47r871qkds".to_string();
         let item = client
@@ -57,7 +52,6 @@ fn correspondents_basic_crud() {
             .await?
             .value;
         assert_eq!(name, item.name);
-        assert_eq!(true, item.is_insensitive);
         assert_eq!("foo".to_string(), item.matches);
         assert_eq!(
             1,
