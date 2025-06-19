@@ -1,31 +1,26 @@
-use async_trait::async_trait;
-use reqwest::Method;
-
-use crate::body;
-use crate::client::Client;
+use crate::clients::Client;
 use crate::error::Result;
-use crate::params;
 use crate::response::Response;
+use crate::utils::{Method, body, params};
+use async_trait::async_trait;
 
 #[async_trait]
-pub trait Logs {
-    async fn list(&self) -> Result<Response<Vec<String>>>;
-    async fn retrieve(&self, log_type: &str) -> Result<Response<Vec<String>>>;
+pub trait Logs<E = ()> {
+    async fn list(&self) -> Result<Response<Vec<String>, E>>;
+    async fn retrieve(&self, log_type: &str) -> Result<Response<Vec<String>, E>>;
 }
 
 #[async_trait]
-impl Logs for Client {
-    async fn list(&self) -> Result<Response<Vec<String>>> {
+impl<C: Client> Logs<C::Extra> for C {
+    async fn list(&self) -> Result<Response<Vec<String>, C::Extra>> {
         let path = "/api/logs/";
-        let req = self.build_request(Method::GET, path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, path, params::NONE, body::NONE)
+            .await
     }
 
-    async fn retrieve(&self, log_type: &str) -> Result<Response<Vec<String>>> {
+    async fn retrieve(&self, log_type: &str) -> Result<Response<Vec<String>, C::Extra>> {
         let path = format!("/api/logs/{log_type}/");
-        let req = self.build_request(Method::GET, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, &path, params::NONE, body::NONE)
+            .await
     }
 }

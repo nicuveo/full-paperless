@@ -11,7 +11,8 @@ help:
 	@echo "$$USAGE"
 
 build:
-	cargo build
+	cargo build --no-default-features
+	cargo build --all-features
 
 clippy:
 	cargo clippy -- -W "clippy::pedantic" -A "clippy::missing_errors_doc"

@@ -9,17 +9,24 @@ pub struct Correspondent {
     pub id: i32,
     #[readonly]
     pub slug: String,
+    #[serde(default)]
     #[readonly]
     pub document_count: i32,
     #[readonly]
     pub last_correspondence: Option<String>,
+    #[serde(default)]
     #[readonly]
-    pub user_can_change: Option<bool>,
+    pub user_can_change: bool,
     pub name: String,
     #[serde(rename = "match")]
-    pub matches: Option<String>,
-    pub matching_algorithm: Option<super::MatchingAlgorithm>,
-    pub is_insensitive: Option<bool>,
-    pub owner: Option<i32>,
+    pub matches: String,
+    pub matching_algorithm: super::MatchingAlgorithm,
+    #[serde(default = "const_true")]
+    pub is_insensitive: bool,
+    pub owner: i32,
     pub permissions: super::Permissions,
+}
+
+fn const_true() -> bool {
+    true
 }

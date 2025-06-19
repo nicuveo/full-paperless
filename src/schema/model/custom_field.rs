@@ -7,6 +7,7 @@ use serde_with::skip_serializing_none;
 pub struct CustomField {
     #[readonly]
     pub id: i32,
+    #[serde(default)]
     #[readonly]
     pub document_count: i32,
     pub name: String,

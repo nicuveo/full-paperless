@@ -1,5 +1,5 @@
-use paper_plane::authentication::Auth;
-use paper_plane::client::Client;
+use paper_plane::auth::Auth;
+use paper_plane::clients::{Client as _, reqwest::Client};
 use paper_plane::error::Error;
 use paper_plane::schema::api::users;
 use paper_plane::schema::model::PermissionClass;

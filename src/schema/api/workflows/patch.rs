@@ -1,14 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
-use crate::schema::model;
-
 #[skip_serializing_none]
 #[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Patch {
     pub name: Option<String>,
-    pub(crate) triggers: Vec<model::WorkflowTrigger>,
-    pub(crate) actions: Vec<model::WorkflowAction>,
     pub order: Option<i32>,
     pub enabled: Option<bool>,
 }

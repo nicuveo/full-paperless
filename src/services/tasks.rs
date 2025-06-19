@@ -1,60 +1,51 @@
 use async_trait::async_trait;
-use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
-use crate::body;
-use crate::client::Client;
+use crate::clients::Client;
 use crate::error::Result;
-use crate::params;
 use crate::response::Response;
 use crate::schema::api::tasks::{Create, List};
 use crate::schema::model::TaskView;
+use crate::utils::{Method, body, params};
 
 pub type Item = TaskView;
 
 #[async_trait]
-pub trait Tasks {
-    async fn list(&self, params: &List) -> Result<Response<Vec<Item>>>;
-    async fn retrieve(&self, id: i32) -> Result<Response<Item>>;
-    async fn run(&self, body: &Create) -> Result<Response<Item>>;
-    async fn acknowledge(&self, body: &[i32]) -> Result<Response<Vec<i32>>>;
+pub trait Tasks<E = ()> {
+    async fn list(&self, params: &List) -> Result<Response<Vec<Item>, E>>;
+    async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;
+    async fn run(&self, body: &Create) -> Result<Response<Item, E>>;
+    async fn acknowledge(&self, body: &[i32]) -> Result<Response<Vec<i32>, E>>;
 }
 
 #[async_trait]
-impl Tasks for Client {
-    async fn list(&self, params: &List) -> Result<Response<Vec<Item>>> {
+impl<C: Client> Tasks<C::Extra> for C {
+    async fn list(&self, params: &List) -> Result<Response<Vec<Item>, C::Extra>> {
         let path = "/api/tasks/";
-        let req = self.build_request(Method::GET, path, params, body::none)?;
-        let resp = self.send_request(req).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, path, params, body::NONE)
+            .await
     }
 
-    async fn retrieve(&self, id: i32) -> Result<Response<Item>> {
+    async fn retrieve(&self, id: i32) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/tasks/{id}/");
-        let req = self.build_request(Method::GET, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, &path, params::NONE, body::NONE)
+            .await
     }
 
-    async fn run(&self, body: &Create) -> Result<Response<Item>> {
+    async fn run(&self, body: &Create) -> Result<Response<Item, C::Extra>> {
         let path = "/api/tasks/run/";
-        let req = self.build_request(Method::PUT, path, params::NONE, body::json(body))?;
-        let resp = self.send_request(req).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::PUT, path, params::NONE, Some(body))
+            .await
     }
 
-    async fn acknowledge(&self, body: &[i32]) -> Result<Response<Vec<i32>>> {
+    async fn acknowledge(&self, body: &[i32]) -> Result<Response<Vec<i32>, C::Extra>> {
         let path = "/api/tasks/acknowledge/";
         let body = AcknowledgeInput { tasks: body };
-        let req = self.build_request(Method::PUT, path, params::NONE, body::json(&body))?;
-        let resp = self.send_request(req).await?;
-        let resp: Response<AcknowledgeOutput> = Self::decode_json(resp).await?;
-        Ok(Response {
-            value: resp.value.result,
-            status: resp.status,
-            headers: resp.headers,
-            content_type: resp.content_type,
-        })
+        let mut resp: Response<AcknowledgeOutput, C::Extra> = self
+            .request_json(Method::PUT, path, params::NONE, Some(&body))
+            .await?;
+        let value = std::mem::take(&mut resp.value.result);
+        Ok(resp.replace(value))
     }
 }
 

@@ -1,96 +1,76 @@
-use async_trait::async_trait;
-use reqwest::Method;
-
-use crate::body;
-use crate::client::Client;
+use crate::clients::Client;
 use crate::error::Result;
-use crate::params;
 use crate::response::Response;
 use crate::schema::api::correspondents::{Create, List, Patch};
 use crate::schema::model::{Correspondent, Paginated};
+use crate::utils::{Method, body, params};
+use async_trait::async_trait;
 
 pub type Item = Correspondent;
 
 #[async_trait]
-pub trait Correspondents {
-    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>>>;
-    async fn create(&self, body: &Create) -> Result<Response<Item>>;
-    async fn retrieve(&self, id: i32) -> Result<Response<Item>>;
-    async fn update(&self, item: &Item) -> Result<Response<Item>>;
-    async fn patch(&self, item: &mut Item, body: &Patch) -> Result<Response<()>>;
-    async fn destroy(&self, item: Item) -> Result<Response<()>>;
+pub trait Correspondents<E> {
+    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, E>>;
+    async fn create(&self, body: &Create) -> Result<Response<Item, E>>;
+    async fn retrieve(&self, id: i32) -> Result<Response<Item, E>>;
+    async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, E>>;
+    async fn destroy(&self, id: i32) -> Result<Response<(), E>>;
 
     async fn previous_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>>;
+    ) -> Result<Option<Response<Paginated<Item>, E>>>;
     async fn next_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>>;
+    ) -> Result<Option<Response<Paginated<Item>, E>>>;
 }
 
 #[async_trait]
-impl Correspondents for Client {
-    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>>> {
+impl<C: Client> Correspondents<C::Extra> for C {
+    async fn list(&self, params: &List) -> Result<Response<Paginated<Item>, C::Extra>> {
         let path = "/api/correspondents/";
-        let req = self.build_request(Method::GET, path, params, body::none)?;
-        let resp = self.send_request(req).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, path, params, body::NONE)
+            .await
     }
 
-    async fn create(&self, body: &Create) -> Result<Response<Item>> {
+    async fn create(&self, body: &Create) -> Result<Response<Item, C::Extra>> {
         let path = "/api/correspondents/";
-        let req = self.build_request(Method::POST, path, params::NONE, body::json(body))?;
-        let resp = self.send_request(req).await?;
-        let id = Self::decode_id(resp).await?;
-        // required fields are missing in the response to the create request
-        self.retrieve(id).await
+        self.request_json(Method::POST, path, params::NONE, Some(body))
+            .await
     }
 
-    async fn retrieve(&self, id: i32) -> Result<Response<Item>> {
+    async fn retrieve(&self, id: i32) -> Result<Response<Item, C::Extra>> {
         let path = format!("/api/correspondents/{id}/");
         let params = vec![("full_perms", true)];
-        let req = self.build_request(Method::GET, &path, &params, body::none)?;
-        let resp = self.send_request(req).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::GET, &path, &params, body::NONE)
+            .await
     }
 
-    async fn update(&self, body: &Item) -> Result<Response<Item>> {
-        let path = format!("/api/correspondents/{}/", body.id);
+    async fn patch(&self, id: i32, body: &Patch) -> Result<Response<Item, C::Extra>> {
+        let path = format!("/api/correspondents/{id}/");
         let params = vec![("full_perms", true)];
-        let body = Create::from(body);
-        let req = self.build_request(Method::PUT, &path, &params, body::json(&body))?;
-        let resp = self.send_request(req).await?;
-        Self::decode_json(resp).await
+        self.request_json(Method::PATCH, &path, &params, Some(body))
+            .await
     }
 
-    async fn patch(&self, item: &mut Item, body: &Patch) -> Result<Response<()>> {
-        let path = format!("/api/correspondents/{}/", item.id);
-        let params = vec![("full_perms", true)];
-        let req = self.build_request(Method::PATCH, &path, &params, body::json(body))?;
-        let resp = Self::decode_json(self.send_request(req).await?).await?;
-        Ok(resp.assign(item))
-    }
-
-    async fn destroy(&self, item: Item) -> Result<Response<()>> {
-        let path = format!("/api/correspondents/{}/", item.id);
-        let req = self.build_request(Method::DELETE, &path, params::NONE, body::none)?;
-        let resp = self.send_request(req).await?;
-        Self::ignore_content(resp)
+    async fn destroy(&self, id: i32) -> Result<Response<(), C::Extra>> {
+        let path = format!("/api/correspondents/{id}/");
+        self.request_unit(Method::DELETE, &path, params::NONE, body::NONE)
+            .await
     }
 
     async fn previous_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>> {
-        Client::previous_page(self, current).await
+    ) -> Result<Option<Response<Paginated<Item>, C::Extra>>> {
+        C::previous_page(self, current).await
     }
 
     async fn next_page(
         &self,
         current: &Paginated<Item>,
-    ) -> Result<Option<Response<Paginated<Item>>>> {
-        Client::next_page(self, current).await
+    ) -> Result<Option<Response<Paginated<Item>, C::Extra>>> {
+        C::next_page(self, current).await
     }
 }
